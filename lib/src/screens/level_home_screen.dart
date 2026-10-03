@@ -35,9 +35,12 @@ class _LevelHomeScreenState extends State<LevelHomeScreen> {
         future: _levels,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const ListView(
-              physics: AlwaysScrollableScrollPhysics(),
-              children: [SizedBox(height: 280), Center(child: CircularProgressIndicator())],
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 280),
+                Center(child: CircularProgressIndicator()),
+              ],
             );
           }
           if (snapshot.hasError) {
