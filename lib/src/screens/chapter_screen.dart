@@ -45,9 +45,12 @@ class _ChapterScreenState extends State<ChapterScreen> {
           future: _chapters,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const ListView(
-                physics: AlwaysScrollableScrollPhysics(),
-                children: [SizedBox(height: 240), Center(child: CircularProgressIndicator())],
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
+                  SizedBox(height: 240),
+                  Center(child: CircularProgressIndicator()),
+                ],
               );
             }
             if (snapshot.hasError) {
@@ -59,9 +62,9 @@ class _ChapterScreenState extends State<ChapterScreen> {
 
             final chapters = snapshot.data ?? const <ChapterSummary>[];
             if (chapters.isEmpty) {
-              return const ListView(
-                physics: AlwaysScrollableScrollPhysics(),
-                children: [
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
                   SizedBox(height: 240),
                   Center(child: Text('아직 이 등급에 등록된 단어가 없습니다.')),
                 ],
