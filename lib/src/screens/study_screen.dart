@@ -20,7 +20,7 @@ class StudyScreen extends StatefulWidget {
 class _StudyScreenState extends State<StudyScreen> {
   final ApiService _api = ApiService();
   List<Word> _words = const [];
-  int _index = 0;
+  List<String> _queue = const [];
   bool _loading = true;
   bool _showReading = false;
   bool _showMeaning = false;
@@ -33,6 +33,13 @@ class _StudyScreenState extends State<StudyScreen> {
     _load();
   }
 
+  int get _knownCount => _words.where((word) => word.known).length;
+
+  Word get _current {
+    final currentId = _queue.first;
+    return _words.firstWhere((word) => word.id == currentId);
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -43,8 +50,10 @@ class _StudyScreenState extends State<StudyScreen> {
       if (!mounted) return;
       setState(() {
         _words = words;
-        _index = 0;
+        _queue = words.where((word) => !word.known).map((word) => word.id).toList();
         _loading = false;
+        _showReading = false;
+        _showMeaning = false;
       });
     } catch (error) {
       if (!mounted) return;
@@ -55,8 +64,6 @@ class _StudyScreenState extends State<StudyScreen> {
     }
   }
 
-  Word get _current => _words[_index];
-
   void _resetReveal() {
     setState(() {
       _showReading = false;
@@ -64,57 +71,65 @@ class _StudyScreenState extends State<StudyScreen> {
     });
   }
 
+  void _replaceWord(Word updated) {
+    final index = _words.indexWhere((word) => word.id == updated.id);
+    if (index < 0) return;
+    _words = [..._words]..[index] = updated;
+  }
+
   Future<void> _toggleFavorite() async {
-    if (_submitting) return;
+    if (_submitting || _queue.isEmpty) return;
     final current = _current;
     final next = !current.favorite;
-    setState(() {
-      _words = [..._words]..[_index] = current.copyWith(favorite: next);
-    });
+    setState(() => _replaceWord(current.copyWith(favorite: next)));
+
     try {
       final updated = await _api.updateWord(current.id, favorite: next);
       if (!mounted) return;
-      setState(() {
-        _words = [..._words]..[_index] = updated;
-      });
+      setState(() => _replaceWord(updated));
     } catch (error) {
       if (!mounted) return;
-      setState(() {
-        _words = [..._words]..[_index] = current;
-      });
+      setState(() => _replaceWord(current));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('즐겨찾기 저장 실패: $error')),
       );
     }
   }
 
-  Future<void> _advance({required bool markKnown}) async {
-    if (_submitting || _words.isEmpty) return;
+  void _studyAgain() {
+    if (_submitting || _queue.isEmpty) return;
+    setState(() {
+      if (_queue.length > 1) {
+        final currentId = _queue.first;
+        _queue = [..._queue.skip(1), currentId];
+      }
+      _showReading = false;
+      _showMeaning = false;
+    });
+  }
+
+  Future<void> _markKnown() async {
+    if (_submitting || _queue.isEmpty) return;
     final current = _current;
     setState(() => _submitting = true);
 
     try {
-      if (markKnown && !current.known) {
-        final updated = await _api.updateWord(current.id, known: true);
-        if (!mounted) return;
-        setState(() {
-          _words = [..._words]..[_index] = updated;
-        });
-      }
-
+      final updated = current.known
+          ? current
+          : await _api.updateWord(current.id, known: true);
       if (!mounted) return;
-      if (_index >= _words.length - 1) {
-        setState(() => _submitting = false);
-        await _showCompleteDialog();
-        return;
-      }
 
       setState(() {
-        _index += 1;
+        _replaceWord(updated);
+        _queue = _queue.skip(1).toList();
         _showReading = false;
         _showMeaning = false;
         _submitting = false;
       });
+
+      if (_queue.isEmpty && mounted) {
+        await _showCompleteDialog();
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _submitting = false);
@@ -125,20 +140,20 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   Future<void> _showCompleteDialog() async {
-    final known = _words.where((word) => word.known).length;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('챕터 학습 완료'),
-        content: Text('${_words.length}단어를 모두 확인했습니다.\n현재 알고 있음: $known/${_words.length}'),
+        icon: const Icon(Icons.check_circle_outline_rounded),
+        title: const Text('챕터 완료'),
+        content: Text('${_words.length}개 단어를 모두 알고 있음으로 표시했어요.'),
         actions: [
           FilledButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
               Navigator.of(context).pop();
             },
-            child: const Text('챕터로 돌아가기'),
+            child: const Text('챕터 목록으로'),
           ),
         ],
       ),
@@ -151,7 +166,7 @@ class _StudyScreenState extends State<StudyScreen> {
       appBar: AppBar(
         centerTitle: true,
         title: Text(
-          '${widget.level} · Chapter ${widget.chapter}',
+          '${widget.level}  ·  ${widget.chapter.toString().padLeft(2, '0')}',
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
@@ -187,61 +202,61 @@ class _StudyScreenState extends State<StudyScreen> {
     if (_words.isEmpty) {
       return const Center(child: Text('이 챕터에는 단어가 없습니다.'));
     }
+    if (_queue.isEmpty) {
+      return _AlreadyComplete(
+        total: _words.length,
+        onBack: () => Navigator.of(context).pop(),
+      );
+    }
 
     final current = _current;
     final scheme = Theme.of(context).colorScheme;
-    final answered = _index;
+    final known = _knownCount;
+    final total = _words.length;
+    final progress = total == 0 ? 0.0 : known / total;
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
+        padding: const EdgeInsets.fromLTRB(18, 6, 18, 16),
         child: Column(
           children: [
-            Row(
-              children: [
-                Text(
-                  '$answered/${_words.length}',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: LinearProgressIndicator(
-                      minHeight: 7,
-                      value: _words.isEmpty ? 0 : answered / _words.length,
-                      backgroundColor: scheme.surfaceContainerHighest,
-                    ),
-                  ),
-                ),
-              ],
+            _ProgressHeader(
+              known: known,
+              total: total,
+              remaining: _queue.length,
+              progress: progress,
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: Card(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: 0.62),
+                  ),
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                   child: Column(
                     children: [
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: scheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(999),
+                              color: scheme.primary.withValues(alpha: 0.11),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
-                              'New',
-                              style: TextStyle(
-                                color: scheme.onPrimaryContainer,
-                                fontWeight: FontWeight.w800,
-                              ),
+                              '${_queue.length}개 남음',
+                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    color: scheme.primary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const Spacer(),
                           IconButton(
                             tooltip: current.favorite ? '즐겨찾기 해제' : '즐겨찾기 추가',
                             onPressed: _toggleFavorite,
@@ -250,95 +265,113 @@ class _StudyScreenState extends State<StudyScreen> {
                               color: current.favorite ? scheme.primary : scheme.onSurfaceVariant,
                             ),
                           ),
-                          const Spacer(),
-                          _RevealIconButton(
-                            tooltip: '히라가나',
-                            selected: _showReading,
-                            icon: Icons.translate_rounded,
-                            onPressed: () => setState(() => _showReading = !_showReading),
-                          ),
-                          const SizedBox(width: 8),
-                          _RevealIconButton(
-                            tooltip: '의미',
-                            selected: _showMeaning,
-                            icon: Icons.notes_rounded,
-                            onPressed: () => setState(() => _showMeaning = !_showMeaning),
-                          ),
                         ],
                       ),
-                      const Spacer(flex: 2),
-                      if (_showReading && current.reading.isNotEmpty) ...[
-                        Text(
-                          current.reading,
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(8, 22, 8, 24),
+                          child: Column(
+                            children: [
+                              if (_showReading && current.reading.isNotEmpty) ...[
+                                Text(
+                                  current.reading,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  current.word,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                                        fontSize: 68,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -2.2,
+                                      ),
+                                ),
                               ),
-                        ),
-                        const SizedBox(height: 6),
-                      ],
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          current.word,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                                fontSize: 66,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -2,
+                              if (_showMeaning && current.meaningKo.isNotEmpty) ...[
+                                const SizedBox(height: 14),
+                                Text(
+                                  current.meaningKo,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                              ],
+                              const SizedBox(height: 40),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 18,
+                                    height: 2,
+                                    color: scheme.primary.withValues(alpha: 0.8),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'EXAMPLE',
+                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 1.4,
+                                        ),
+                                  ),
+                                ],
                               ),
+                              const SizedBox(height: 14),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  current.exampleJa.isEmpty ? '예문이 없습니다.' : current.exampleJa,
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        height: 1.55,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                              ),
+                              if (_showReading && current.exampleReading.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    current.exampleReading,
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                          height: 1.5,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                              if (_showMeaning && current.exampleKo.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    current.exampleKo,
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                          height: 1.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
-                      if (_showMeaning && current.meaningKo.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          current.meaningKo,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                      ],
-                      const Spacer(),
-                      const Divider(),
-                      const Spacer(),
-                      Text(
-                        current.exampleJa.isEmpty ? '예문이 없습니다.' : current.exampleJa,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              height: 1.55,
-                              fontWeight: FontWeight.w500,
-                            ),
-                      ),
-                      if (_showReading && current.exampleReading.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          current.exampleReading,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                                height: 1.5,
-                              ),
-                        ),
-                      ],
-                      if (_showMeaning && current.exampleKo.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          current.exampleKo,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                                height: 1.45,
-                              ),
-                        ),
-                      ],
-                      const Spacer(flex: 2),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: IconButton.outlined(
-                          tooltip: '단어 + 예문만 보기',
-                          onPressed: (_showReading || _showMeaning) ? _resetReveal : null,
-                          icon: const Icon(Icons.undo_rounded),
-                        ),
+                      _RevealBar(
+                        showReading: _showReading,
+                        showMeaning: _showMeaning,
+                        onReading: () => setState(() => _showReading = !_showReading),
+                        onMeaning: () => setState(() => _showMeaning = !_showMeaning),
+                        onReset: _resetReveal,
                       ),
                     ],
                   ),
@@ -350,12 +383,13 @@ class _StudyScreenState extends State<StudyScreen> {
               children: [
                 Expanded(
                   child: SizedBox(
-                    height: 64,
-                    child: OutlinedButton(
-                      onPressed: _submitting ? null : () => _advance(markKnown: false),
-                      child: const Text(
+                    height: 60,
+                    child: OutlinedButton.icon(
+                      onPressed: _submitting ? null : _studyAgain,
+                      icon: const Icon(Icons.replay_rounded, size: 20),
+                      label: const Text(
                         '다시 학습',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
                       ),
                     ),
                   ),
@@ -363,19 +397,20 @@ class _StudyScreenState extends State<StudyScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: SizedBox(
-                    height: 64,
-                    child: FilledButton(
-                      onPressed: _submitting ? null : () => _advance(markKnown: true),
-                      child: _submitting
+                    height: 60,
+                    child: FilledButton.icon(
+                      onPressed: _submitting ? null : _markKnown,
+                      icon: _submitting
                           ? const SizedBox(
-                              width: 22,
-                              height: 22,
+                              width: 18,
+                              height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text(
-                              '알고 있음',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                            ),
+                          : const Icon(Icons.check_rounded, size: 20),
+                      label: const Text(
+                        '알고 있음',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                      ),
                     ),
                   ),
                 ),
@@ -388,29 +423,220 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 }
 
-class _RevealIconButton extends StatelessWidget {
-  const _RevealIconButton({
-    required this.tooltip,
-    required this.selected,
-    required this.icon,
-    required this.onPressed,
+class _ProgressHeader extends StatelessWidget {
+  const _ProgressHeader({
+    required this.known,
+    required this.total,
+    required this.remaining,
+    required this.progress,
   });
 
-  final String tooltip;
-  final bool selected;
-  final IconData icon;
-  final VoidCallback onPressed;
+  final int known;
+  final int total;
+  final int remaining;
+  final double progress;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return IconButton.outlined(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      style: IconButton.styleFrom(
-        backgroundColor: selected ? scheme.primaryContainer : null,
+    return Column(
+      children: [
+        Row(
+          children: [
+            Text(
+              '알고 있음 $known / $total',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+            const Spacer(),
+            Text(
+              '$remaining개 학습 중',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 9),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(99),
+          child: LinearProgressIndicator(
+            minHeight: 6,
+            value: progress,
+            backgroundColor: scheme.surfaceContainerHighest,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RevealBar extends StatelessWidget {
+  const _RevealBar({
+    required this.showReading,
+    required this.showMeaning,
+    required this.onReading,
+    required this.onMeaning,
+    required this.onReset,
+  });
+
+  final bool showReading;
+  final bool showMeaning;
+  final VoidCallback onReading;
+  final VoidCallback onMeaning;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final hasReveal = showReading || showMeaning;
+
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(18),
       ),
-      icon: Icon(icon),
+      child: Row(
+        children: [
+          Expanded(
+            child: _RevealChoice(
+              label: '히라가나',
+              icon: Icons.translate_rounded,
+              selected: showReading,
+              onTap: onReading,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _RevealChoice(
+              label: '의미',
+              icon: Icons.subject_rounded,
+              selected: showMeaning,
+              onTap: onMeaning,
+            ),
+          ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 160),
+            child: hasReveal
+                ? Padding(
+                    key: const ValueKey('reset'),
+                    padding: const EdgeInsets.only(left: 4),
+                    child: IconButton(
+                      tooltip: '가리기',
+                      onPressed: onReset,
+                      icon: const Icon(Icons.undo_rounded),
+                    ),
+                  )
+                : const SizedBox.shrink(key: ValueKey('empty')),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RevealChoice extends StatelessWidget {
+  const _RevealChoice({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? scheme.surface : Colors.transparent,
+      borderRadius: BorderRadius.circular(13),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(13),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AlreadyComplete extends StatelessWidget {
+  const _AlreadyComplete({required this.total, required this.onBack});
+
+  final int total;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.done_all_rounded, color: scheme.primary, size: 34),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                '이 챕터는 완료했어요',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$total개 단어가 모두 알고 있음 상태입니다.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 22),
+              FilledButton.icon(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('챕터 목록으로'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
