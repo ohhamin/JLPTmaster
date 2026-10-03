@@ -29,6 +29,13 @@ jobs:
       - name: Generate Android project
         run: flutter create . --project-name jlptmaster --org com.jlptmaster --platforms=android
 
+      - name: Ensure Android internet permission
+        run: |
+          if ! grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml; then
+            sed -i '2i\    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
+          fi
+          grep -n 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
+
       - name: Install dependencies
         run: flutter pub get
 
