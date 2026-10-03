@@ -6,7 +6,10 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from fugashi import Tagger
 from pykakasi import kakasi
+
+_LEVEL_RANK = {'N5': 0, 'N4': 1, 'N3': 2, 'N2': 3, 'N1': 4}
 
 
 def _is_single_kana(text: str) -> bool:
@@ -56,10 +59,36 @@ def _reading_converter():
     return to_hiragana
 
 
+def _token_keys(token: object) -> list[str]:
+    keys: list[str] = []
+    surface = str(getattr(token, 'surface', '') or '').strip()
+    if surface:
+        keys.append(surface)
+    feature = getattr(token, 'feature', None)
+    if feature is not None:
+        for name in ('lemma', 'orthBase'):
+            value = str(getattr(feature, name, '') or '').strip()
+            if value and value != '*' and value not in keys:
+                keys.append(value)
+    return keys
+
+
+def _token_reading(token: object, to_hiragana) -> str:
+    feature = getattr(token, 'feature', None)
+    if feature is None:
+        return ''
+    for name in ('kana', 'kanaBase', 'pron', 'pronBase'):
+        value = str(getattr(feature, name, '') or '').strip()
+        if value and value != '*':
+            return to_hiragana(value)
+    return ''
+
+
 def enrich(words: list[dict]) -> tuple[list[dict], dict[str, int]]:
     to_hiragana = _reading_converter()
+    tagger = Tagger()
 
-    surfaces: dict[str, list[dict]] = {}
+    lexicon: dict[str, list[dict]] = {}
     for word in words:
         candidates = [word.get('word', '')]
         other_forms = word.get('other_forms')
@@ -69,9 +98,8 @@ def enrich(words: list[dict]) -> tuple[list[dict], dict[str, int]]:
             surface = str(surface).strip()
             if not surface or _is_single_kana(surface):
                 continue
-            surfaces.setdefault(surface, []).append(word)
+            lexicon.setdefault(surface, []).append(word)
 
-    ordered_surfaces = sorted(surfaces, key=len, reverse=True)
     stats = {'total': len(words), 'examples': 0, 'readings': 0, 'related_links': 0}
 
     for word in words:
@@ -84,7 +112,9 @@ def enrich(words: list[dict]) -> tuple[list[dict], dict[str, int]]:
 
         word['example_ja'] = example_ja
         word['example_ko'] = example_ko
-        word['example_reading'] = str(word.get('example_reading') or to_hiragana(example_ja)).strip()
+        # Keep the written hiragana reading stable even when token pronunciation differs
+        # (for example は as a particle is kept as は rather than わ).
+        word['example_reading'] = to_hiragana(example_ja).strip()
         if word['example_reading']:
             stats['readings'] += 1
         word['part_of_speech'] = str(word.get('part_of_speech') or _pos_label(word.get('pos'))).strip()
@@ -93,25 +123,41 @@ def enrich(words: list[dict]) -> tuple[list[dict], dict[str, int]]:
         seen_ids: set[str] = set()
         current_id = str(word.get('id', ''))
         if example_ja:
-            for surface in ordered_surfaces:
-                if surface not in example_ja:
+            for token in tagger(example_ja):
+                token_candidates: dict[str, dict] = {}
+                for key in _token_keys(token):
+                    for candidate in lexicon.get(key, []):
+                        candidate_id = str(candidate.get('id', ''))
+                        if not candidate_id or candidate_id == current_id or candidate_id in seen_ids:
+                            continue
+                        token_candidates[candidate_id] = candidate
+                if not token_candidates:
                     continue
-                for candidate in surfaces[surface]:
-                    candidate_id = str(candidate.get('id', ''))
-                    if not candidate_id or candidate_id == current_id or candidate_id in seen_ids:
-                        continue
-                    seen_ids.add(candidate_id)
-                    related.append(
-                        {
-                            'id': candidate_id,
-                            'word': str(candidate.get('word', '')),
-                            'reading': str(candidate.get('reading') or candidate.get('hiragana') or ''),
-                            'meaning_ko': str(candidate.get('meaning_ko') or ''),
-                            'level': candidate.get('level'),
-                        }
-                    )
-                    if len(related) >= 12:
-                        break
+
+                token_reading = _token_reading(token, to_hiragana)
+                ranked = sorted(
+                    token_candidates.values(),
+                    key=lambda candidate: (
+                        0
+                        if token_reading
+                        and to_hiragana(str(candidate.get('reading') or candidate.get('hiragana') or '')) == token_reading
+                        else 1,
+                        _LEVEL_RANK.get(str(candidate.get('level', '')), 99),
+                        str(candidate.get('word', '')),
+                    ),
+                )
+                candidate = ranked[0]
+                candidate_id = str(candidate.get('id', ''))
+                seen_ids.add(candidate_id)
+                related.append(
+                    {
+                        'id': candidate_id,
+                        'word': str(candidate.get('word', '')),
+                        'reading': str(candidate.get('reading') or candidate.get('hiragana') or ''),
+                        'meaning_ko': str(candidate.get('meaning_ko') or ''),
+                        'level': candidate.get('level'),
+                    }
+                )
                 if len(related) >= 12:
                     break
 
