@@ -33,10 +33,9 @@ class _ChapterScreenState extends State<ChapterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        centerTitle: true,
         title: Text(
           '${widget.level} 챕터',
-          style: const TextStyle(fontWeight: FontWeight.w800),
+          style: const TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
       body: RefreshIndicator(
@@ -71,40 +70,25 @@ class _ChapterScreenState extends State<ChapterScreen> {
               );
             }
 
+            final total = chapters.fold<int>(0, (sum, item) => sum + item.total);
+            final known = chapters.fold<int>(0, (sum, item) => sum + item.known);
+
             return ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 34),
               itemCount: chapters.length + 1,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 18 : 10),
               itemBuilder: (context, index) {
                 if (index == 0) {
-                  final total = chapters.fold<int>(0, (sum, item) => sum + item.total);
-                  final known = chapters.fold<int>(0, (sum, item) => sum + item.known);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${widget.level} 단어 학습',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '$known/$total 단어 알고 있음 · 챕터당 최대 50단어',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                      ],
-                    ),
+                  return _ChapterHeader(
+                    level: widget.level,
+                    known: known,
+                    total: total,
                   );
                 }
 
                 final chapter = chapters[index - 1];
-                return _ChapterCard(
+                return _ChapterRow(
                   summary: chapter,
                   onTap: () async {
                     await Navigator.of(context).push(
@@ -127,8 +111,64 @@ class _ChapterScreenState extends State<ChapterScreen> {
   }
 }
 
-class _ChapterCard extends StatelessWidget {
-  const _ChapterCard({required this.summary, required this.onTap});
+class _ChapterHeader extends StatelessWidget {
+  const _ChapterHeader({
+    required this.level,
+    required this.known,
+    required this.total,
+  });
+
+  final String level;
+  final int known;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final progress = total == 0 ? 0.0 : known / total;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            level,
+            style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -1.5,
+                ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$known / $total 알고 있음',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    minHeight: 6,
+                    value: progress,
+                    backgroundColor: scheme.surfaceContainerHighest,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChapterRow extends StatelessWidget {
+  const _ChapterRow({required this.summary, required this.onTap});
 
   final ChapterSummary summary;
   final VoidCallback onTap;
@@ -137,74 +177,82 @@ class _ChapterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final complete = summary.total > 0 && summary.known == summary.total;
-    return Card(
+
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: scheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      summary.chapter.toString().padLeft(2, '0'),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: scheme.onPrimaryContainer,
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.52)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(15, 14, 14, 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: complete
+                        ? scheme.primary.withValues(alpha: 0.14)
+                        : scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Chapter ${summary.chapter}',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
+                  child: complete
+                      ? Icon(Icons.check_rounded, color: scheme.primary)
+                      : Text(
+                          summary.chapter.toString().padLeft(2, '0'),
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w900,
                               ),
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          complete ? '학습 완료' : '${summary.total - summary.known}단어 남음',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    '${summary.known}/${summary.total}',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.chevron_right_rounded),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(99),
-                child: LinearProgressIndicator(
-                  minHeight: 7,
-                  value: summary.progress,
-                  backgroundColor: scheme.surfaceContainerHighest,
                 ),
-              ),
-            ],
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Chapter ${summary.chapter}',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(99),
+                              child: LinearProgressIndicator(
+                                minHeight: 5,
+                                value: summary.progress,
+                                backgroundColor: scheme.surfaceContainerHighest,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            '${summary.known}/${summary.total}',
+                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.arrow_forward_ios_rounded, size: 16, color: scheme.onSurfaceVariant),
+              ],
+            ),
           ),
         ),
       ),

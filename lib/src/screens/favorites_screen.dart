@@ -48,86 +48,111 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: FutureBuilder<List<Word>>(
-        future: _favorites,
-        builder: (context, snapshot) {
-          final words = snapshot.data ?? const <Word>[];
-          return ListView(
+    return FutureBuilder<List<Word>>(
+      future: _favorites,
+      builder: (context, snapshot) {
+        final words = snapshot.data ?? const <Word>[];
+        return RefreshIndicator(
+          onRefresh: _refresh,
+          child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-            children: [
-              TextField(
-                controller: _searchController,
-                onChanged: (_) => _reload(),
-                decoration: const InputDecoration(
-                  hintText: '단어 검색...',
-                  prefixIcon: Icon(Icons.search_rounded),
-                ),
-              ),
-              const SizedBox(height: 18),
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData)
-                const Padding(
-                  padding: EdgeInsets.only(top: 160),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (snapshot.hasError)
-                Padding(
-                  padding: const EdgeInsets.only(top: 120),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+                sliver: SliverToBoxAdapter(
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.error_outline_rounded, size: 42),
-                      const SizedBox(height: 10),
-                      Text(snapshot.error.toString(), textAlign: TextAlign.center),
-                      const SizedBox(height: 14),
-                      FilledButton.icon(
-                        onPressed: _reload,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('다시 시도'),
+                      TextField(
+                        controller: _searchController,
+                        onChanged: (_) => _reload(),
+                        decoration: const InputDecoration(
+                          hintText: '즐겨찾기 검색',
+                          prefixIcon: Icon(Icons.search_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Text(
+                            'MY WORDS',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
+                                ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${words.length}개',
+                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                )
-              else ...[
-                Text(
-                  '총 ${words.length}단어',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
                 ),
-                const SizedBox(height: 8),
-                if (words.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 120),
-                    child: Center(child: Text('즐겨찾기한 단어가 없습니다.')),
-                  )
-                else
-                  ...words.map(
-                    (word) => _FavoriteRow(
-                      word: word,
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => WordDetailScreen(word: word),
-                          ),
+              ),
+              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (snapshot.hasError)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _FavoriteError(
+                    message: snapshot.error.toString(),
+                    onRetry: _reload,
+                  ),
+                )
+              else if (words.isEmpty)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _EmptyFavorites(),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 36),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisExtent: 158,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final word = words[index];
+                        return _FavoriteTile(
+                          word: word,
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => WordDetailScreen(word: word),
+                              ),
+                            );
+                            if (mounted) _reload();
+                          },
                         );
-                        if (mounted) _reload();
                       },
+                      childCount: words.length,
                     ),
                   ),
-              ],
+                ),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
-class _FavoriteRow extends StatelessWidget {
-  const _FavoriteRow({required this.word, required this.onTap});
+class _FavoriteTile extends StatelessWidget {
+  const _FavoriteTile({required this.word, required this.onTap});
 
   final Word word;
   final VoidCallback onTap;
@@ -135,71 +160,133 @@ class _FavoriteRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                word.level,
-                style: TextStyle(
-                  color: scheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.52)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Flexible(
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withValues(alpha: 0.11),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     child: Text(
-                      word.word,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
+                      word.level,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: scheme.primary,
+                            fontWeight: FontWeight.w900,
                           ),
                     ),
                   ),
-                  if (word.reading.isNotEmpty) ...[
-                    const SizedBox(width: 10),
-                    Flexible(
-                      child: Text(
-                        word.reading,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                      ),
-                    ),
-                  ],
+                  const Spacer(),
+                  Icon(Icons.star_rounded, size: 18, color: scheme.primary),
                 ],
               ),
-            ),
-            const SizedBox(width: 10),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 135),
-              child: Text(
-                word.meaningKo,
+              const Spacer(),
+              Text(
+                word.word,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.end,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
                     ),
               ),
+              if (word.reading.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  word.reading,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Text(
+                word.meaningKo,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyFavorites extends StatelessWidget {
+  const _EmptyFavorites();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.star_outline_rounded, size: 46, color: scheme.onSurfaceVariant),
+            const SizedBox(height: 12),
+            Text(
+              '아직 모아둔 단어가 없어요',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
             ),
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right_rounded),
+            const SizedBox(height: 6),
+            Text(
+              '학습 중 별을 누르면 여기에 저장됩니다.',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FavoriteError extends StatelessWidget {
+  const _FavoriteError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 42),
+            const SizedBox(height: 10),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('다시 시도'),
+            ),
           ],
         ),
       ),

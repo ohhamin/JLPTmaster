@@ -73,32 +73,35 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
         showDragHandle: true,
         builder: (context) => DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 0.78,
+          initialChildSize: 0.8,
           minChildSize: 0.45,
           maxChildSize: 0.95,
-          builder: (context, controller) => Padding(
-            padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
-            child: ListView(
-              controller: controller,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.auto_awesome_rounded),
-                    const SizedBox(width: 8),
-                    Text(
-                      'AI 단어 · 예문 분석',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                SelectableText(
-                  explanation,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.65),
-                ),
-              ],
+          builder: (context, controller) => SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 4, 22, 22),
+              child: ListView(
+                controller: controller,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.auto_awesome_rounded),
+                      const SizedBox(width: 8),
+                      Text(
+                        'AI 단어 · 예문 분석',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  SelectableText(
+                    explanation,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.68),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -116,49 +119,50 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  item.word,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                if (item.reading.isNotEmpty) ...[
-                  const SizedBox(width: 10),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
+      builder: (context) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 26),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Flexible(
                     child: Text(
-                      item.reading,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      item.word,
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
                           ),
                     ),
                   ),
+                  if (item.reading.isNotEmpty) ...[
+                    const SizedBox(width: 10),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Text(
+                        item.reading,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ),
+                  ],
                 ],
+              ),
+              const SizedBox(height: 12),
+              if (item.level != null) _SmallBadge(text: item.level!),
+              if (item.meaningKo.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  item.meaningKo,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(height: 1.45),
+                ),
               ],
-            ),
-            const SizedBox(height: 12),
-            if (item.level != null)
-              Chip(
-                visualDensity: VisualDensity.compact,
-                label: Text(item.level!),
-              ),
-            if (item.meaningKo.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                item.meaningKo,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(height: 1.45),
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -167,11 +171,15 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final relatedTileWidth = (screenWidth - 52) / 2;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _word.word,
-          style: const TextStyle(fontWeight: FontWeight.w800),
+        title: const Text(
+          '단어 상세',
+          style: TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
           IconButton(
@@ -185,193 +193,287 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 40),
-        children: [
-          Row(
-            children: [
-              _Badge(text: _word.level),
-              const SizedBox(width: 8),
-              _Badge(text: 'Chapter ${_word.chapter}'),
-              const Spacer(),
-              if (_word.known)
-                Text(
-                  '알고 있음',
-                  style: TextStyle(
-                    color: scheme.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Flexible(
-                child: Text(
-                  _word.word,
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(20, 8, 20, 72 + bottomInset),
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.58)),
               ),
-              if (_word.reading.isNotEmpty) ...[
-                const SizedBox(width: 12),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    _word.reading,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _word.meaningKo,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          if (_word.partOfSpeech.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              children: [
-                Chip(
-                  visualDensity: VisualDensity.compact,
-                  label: Text(_word.partOfSpeech),
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 28),
-          const Divider(),
-          const SizedBox(height: 20),
-          Text(
-            '예문',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 14),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(
+                    children: [
+                      _SmallBadge(text: _word.level),
+                      const SizedBox(width: 8),
+                      _SmallBadge(text: 'CH ${_word.chapter.toString().padLeft(2, '0')}'),
+                      const Spacer(),
+                      if (_word.known)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle_rounded, size: 16, color: scheme.primary),
+                            const SizedBox(width: 5),
+                            Text(
+                              '알고 있음',
+                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    color: scheme.primary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
                   Text(
-                    _word.exampleJa.isEmpty ? '예문이 없습니다.' : _word.exampleJa,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          height: 1.5,
-                          fontWeight: FontWeight.w600,
+                    _word.word,
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -1.2,
                         ),
                   ),
-                  if (_word.exampleReading.isNotEmpty) ...[
-                    const SizedBox(height: 10),
+                  if (_word.reading.isNotEmpty) ...[
+                    const SizedBox(height: 4),
                     Text(
-                      _word.exampleReading,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      _word.reading,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             color: scheme.onSurfaceVariant,
-                            height: 1.5,
+                            fontWeight: FontWeight.w600,
                           ),
                     ),
                   ],
-                  if (_word.exampleKo.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _word.exampleKo,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.45),
+                  const SizedBox(height: 14),
+                  Text(
+                    _word.meaningKo,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  if (_word.partOfSpeech.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _word.partOfSpeech,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
                     ),
                   ],
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 28),
-          Text(
-            '예문 속 JLPT 단어',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 10),
-          if (_word.exampleWords.isEmpty)
-            Text(
-              '연결된 JLPT 단어가 없습니다.',
-              style: TextStyle(color: scheme.onSurfaceVariant),
-            )
-          else
-            ..._word.exampleWords.map(
-              (item) => Card(
-                child: ListTile(
-                  onTap: () => _showRelatedWord(item),
-                  leading: item.level == null
-                      ? null
-                      : Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: scheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            item.level!,
-                            style: TextStyle(
-                              color: scheme.onPrimaryContainer,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
+            const SizedBox(height: 30),
+            const _SectionLabel(number: '01', title: '예문'),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 3,
+                    height: 82,
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _word.exampleJa.isEmpty ? '예문이 없습니다.' : _word.exampleJa,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                height: 1.55,
+                                fontWeight: FontWeight.w700,
+                              ),
                         ),
-                  title: Text(
-                    item.word,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+                        if (_word.exampleReading.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            _word.exampleReading,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  height: 1.5,
+                                ),
+                          ),
+                        ],
+                        if (_word.exampleKo.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            _word.exampleKo,
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  height: 1.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                  subtitle: Text(
-                    [item.reading, item.meaningKo].where((text) => text.isNotEmpty).join(' · '),
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                ),
+                ],
               ),
             ),
-          const SizedBox(height: 30),
-          Text(
-            'AI 설명',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
+            const SizedBox(height: 34),
+            const _SectionLabel(number: '02', title: '예문 속 JLPT 단어'),
+            const SizedBox(height: 14),
+            if (_word.exampleWords.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(18),
                 ),
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: ListTile(
-              onTap: _aiLoading ? null : _requestAiExplanation,
-              leading: const Icon(Icons.auto_awesome_rounded),
-              title: const Text(
-                'GPT로 단어 · 예문 분석',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: const Text('뜻, 연어, 번역, 문법, 주요 어휘를 한국어로 설명합니다.'),
-              trailing: _aiLoading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                child: Text(
+                  '연결된 JLPT 단어가 없습니다.',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+              )
+            else
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _word.exampleWords
+                    .map(
+                      (item) => SizedBox(
+                        width: relatedTileWidth,
+                        child: _RelatedTile(
+                          item: item,
+                          onTap: () => _showRelatedWord(item),
+                        ),
+                      ),
                     )
-                  : const Icon(Icons.chevron_right_rounded),
+                    .toList(),
+              ),
+            const SizedBox(height: 34),
+            const _SectionLabel(number: '03', title: 'AI 설명'),
+            const SizedBox(height: 14),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _aiLoading ? null : _requestAiExplanation,
+                borderRadius: BorderRadius.circular(22),
+                child: Ink(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 16, 18),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        scheme.primary.withValues(alpha: 0.15),
+                        scheme.surfaceContainerLow,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: scheme.primary.withValues(alpha: 0.28)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: scheme.primary.withValues(alpha: 0.14),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.auto_awesome_rounded, color: scheme.primary),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '이 단어를 더 깊게 보기',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '뜻 · 연어 · 문법 · 예문을 한국어로 분석해요.',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    height: 1.45,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      if (_aiLoading)
+                        const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        const Icon(Icons.arrow_forward_rounded),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _Badge extends StatelessWidget {
-  const _Badge({required this.text});
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.number, required this.title});
+
+  final String number;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Text(
+          number,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: scheme.primary,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SmallBadge extends StatelessWidget {
+  const _SmallBadge({required this.text});
 
   final String text;
 
@@ -381,14 +483,72 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: scheme.primaryContainer,
+        color: scheme.primary.withValues(alpha: 0.11),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         text,
-        style: TextStyle(
-          color: scheme.onPrimaryContainer,
-          fontWeight: FontWeight.w800,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: scheme.primary,
+              fontWeight: FontWeight.w900,
+            ),
+      ),
+    );
+  }
+}
+
+class _RelatedTile extends StatelessWidget {
+  const _RelatedTile({required this.item, required this.onTap});
+
+  final RelatedWord item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          height: 112,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (item.level != null) _SmallBadge(text: item.level!),
+                  const Spacer(),
+                  Icon(Icons.north_east_rounded, size: 15, color: scheme.onSurfaceVariant),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                item.word,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                [item.reading, item.meaningKo].where((text) => text.isNotEmpty).join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
         ),
       ),
     );

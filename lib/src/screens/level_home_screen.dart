@@ -51,61 +51,106 @@ class _LevelHomeScreenState extends State<LevelHomeScreen> {
           }
 
           final levels = snapshot.data ?? const <LevelSummary>[];
-          return ListView(
+          final totalWords = levels.fold<int>(0, (sum, item) => sum + item.total);
+          final knownWords = levels.fold<int>(0, (sum, item) => sum + item.known);
+
+          return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
-            children: [
-              Text(
-                '어느 단계부터 공부할까요?',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 34),
+            itemCount: levels.length + 1,
+            separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 22 : 12),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return _LevelHeader(
+                  knownWords: knownWords,
+                  totalWords: totalWords,
+                );
+              }
+
+              final item = levels[index - 1];
+              return _LevelCard(
+                summary: item,
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ChapterScreen(level: item.level),
                     ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'JLPT 등급을 선택한 뒤 50단어 단위의 챕터로 학습합니다.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 26),
-              SizedBox(
-                height: 410,
-                child: PageView.builder(
-                  controller: PageController(viewportFraction: 0.86),
-                  itemCount: levels.length,
-                  padEnds: false,
-                  itemBuilder: (context, index) {
-                    final item = levels[index];
-                    return Padding(
-                      padding: EdgeInsets.only(right: index == levels.length - 1 ? 0 : 14),
-                      child: _LevelCard(
-                        summary: item,
-                        onTap: () async {
-                          await Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => ChapterScreen(level: item.level),
-                            ),
-                          );
-                          if (mounted) _refresh();
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                '카드를 좌우로 넘겨 N5 → N1을 선택할 수 있습니다.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ],
+                  );
+                  if (mounted) _refresh();
+                },
+              );
+            },
           );
         },
       ),
+    );
+  }
+}
+
+class _LevelHeader extends StatelessWidget {
+  const _LevelHeader({required this.knownWords, required this.totalWords});
+
+  final int knownWords;
+  final int totalWords;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '오늘은 어디서 시작할까요?',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.6,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '등급을 고르면 50단어 단위 챕터로 이어서 학습할 수 있어요.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+                height: 1.45,
+              ),
+        ),
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.55)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: scheme.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                '전체 진행',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                '$knownWords / $totalWords',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -119,87 +164,98 @@ class _LevelCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    final percent = (summary.progress * 100).round();
+    final levelNumber = int.tryParse(summary.level.replaceFirst('N', '')) ?? 5;
+    final accentAlpha = 0.56 + ((6 - levelNumber) * 0.07);
+
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        child: Stack(
-          children: [
-            Positioned(
-              left: -30,
-              right: -30,
-              bottom: -80,
-              height: 250,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(90),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      scheme.primaryContainer.withValues(alpha: 0.45),
-                      scheme.primary.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(22),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 16, 18),
+            child: Row(
+              children: [
+                Container(
+                  width: 5,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: accentAlpha.clamp(0.0, 1.0)),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: 74,
+                  child: Text(
+                    summary.level,
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -1.5,
+                        ),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${summary.total}단어 · ${summary.chapters}챕터',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 7),
+                      Text(
+                        '${summary.known}개 알고 있음  ·  즐겨찾기 ${summary.favorites}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(99),
+                        child: LinearProgressIndicator(
+                          minHeight: 5,
+                          value: summary.progress,
+                          backgroundColor: scheme.surfaceContainerHighest,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${summary.total}단어 · ${summary.chapters}챕터',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    summary.level,
-                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -2,
-                        ),
-                  ),
-                  const Spacer(),
-                  Row(
+                const SizedBox(width: 14),
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(99),
-                          child: LinearProgressIndicator(
-                            minHeight: 8,
-                            value: summary.progress,
-                            backgroundColor: scheme.surfaceContainerHighest,
-                          ),
-                        ),
+                      CircularProgressIndicator(
+                        value: summary.progress,
+                        strokeWidth: 4,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                        strokeCap: StrokeCap.round,
                       ),
-                      const SizedBox(width: 14),
                       Text(
-                        '${summary.known}/${summary.total}',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
+                        '$percent%',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
                             ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(Icons.star_rounded, size: 18, color: scheme.primary),
-                      const SizedBox(width: 5),
-                      Text('즐겨찾기 ${summary.favorites}'),
-                      const Spacer(),
-                      const Icon(Icons.arrow_forward_rounded),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

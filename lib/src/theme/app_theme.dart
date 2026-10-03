@@ -1,70 +1,76 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const _seed = Color(0xFFF08A2B);
+  static const _seed = Color(0xFFFF8D67);
 
   static ThemeData get light => _build(Brightness.light);
   static ThemeData get dark => _build(Brightness.dark);
 
   static ThemeData _build(Brightness brightness) {
-    final scheme = ColorScheme.fromSeed(
+    final baseScheme = ColorScheme.fromSeed(
       seedColor: _seed,
       brightness: brightness,
     );
     final isLight = brightness == Brightness.light;
+    final scheme = baseScheme.copyWith(
+      surface: isLight ? const Color(0xFFF8F9FA) : const Color(0xFF111315),
+      surfaceContainerLow: isLight ? Colors.white : const Color(0xFF191C1F),
+      surfaceContainerHighest: isLight ? const Color(0xFFEEF0F2) : const Color(0xFF262A2E),
+      outlineVariant: isLight ? const Color(0xFFE2E5E8) : const Color(0xFF30353A),
+    );
 
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
-      scaffoldBackgroundColor: isLight ? const Color(0xFFFCFCFB) : const Color(0xFF151515),
+      scaffoldBackgroundColor: scheme.surface,
       appBarTheme: AppBarTheme(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: isLight ? const Color(0xFFFCFCFB) : const Color(0xFF151515),
+        backgroundColor: scheme.surface,
         foregroundColor: scheme.onSurface,
+        centerTitle: false,
       ),
       cardTheme: CardThemeData(
         elevation: 0,
         margin: EdgeInsets.zero,
-        color: isLight ? Colors.white : const Color(0xFF212121),
+        color: scheme.surfaceContainerLow,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(
-            color: isLight ? const Color(0xFFE6E3DF) : const Color(0xFF343434),
-          ),
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: scheme.outlineVariant),
         ),
+      ),
+      dividerTheme: DividerThemeData(
+        color: scheme.outlineVariant,
+        thickness: 1,
+        space: 1,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isLight ? Colors.white : const Color(0xFF212121),
+        fillColor: scheme.surfaceContainerLow,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(
-            color: isLight ? const Color(0xFFE6E3DF) : const Color(0xFF343434),
-          ),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(
-            color: isLight ? const Color(0xFFE6E3DF) : const Color(0xFF343434),
-          ),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: scheme.primary, width: 1.4),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           side: BorderSide(color: scheme.outlineVariant),
           foregroundColor: scheme.onSurface,
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
@@ -72,11 +78,16 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         height: 70,
-        backgroundColor: isLight ? Colors.white : const Color(0xFF1D1D1D),
-        indicatorColor: scheme.primaryContainer,
+        backgroundColor: isLight ? Colors.white : const Color(0xFF15181B),
+        indicatorColor: scheme.primary.withValues(alpha: 0.15),
         labelTextStyle: WidgetStatePropertyAll(
-          TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w700),
+          TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w800),
         ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: scheme.surfaceContainerLow,
+        modalBackgroundColor: scheme.surfaceContainerLow,
+        showDragHandle: true,
       ),
     );
   }
