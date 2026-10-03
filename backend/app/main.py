@@ -100,7 +100,8 @@ def update_word(word_id: str, payload: WordUpdate) -> dict:
     return updated
 
 
-@app.delete('/api/words/{word_id}', status_code=204)
-def delete_word(word_id: str) -> None:
+@app.delete('/api/words/{word_id}')
+def delete_word(word_id: str) -> dict[str, bool]:
     if not store.delete_word(word_id):
         raise HTTPException(status_code=404, detail='word not found')
+    return {'deleted': True}
