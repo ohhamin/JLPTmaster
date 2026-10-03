@@ -3,15 +3,35 @@
     "id": "sample-001",
     "word": "勉強",
     "reading": "べんきょう",
-    "meaning_ko": "공부",
+    "meaning_ko": "공부, 학습",
     "level": "N5",
+    "chapter": 1,
+    "part_of_speech": "명사·する동사",
     "example_ja": "毎日、日本語を勉強します。",
+    "example_reading": "まいにち、にほんごをべんきょうします。",
     "example_ko": "매일 일본어를 공부합니다.",
+    "example_words": [
+      {
+        "id": null,
+        "word": "毎日",
+        "reading": "まいにち",
+        "meaning_ko": "매일",
+        "level": "N5"
+      },
+      {
+        "id": null,
+        "word": "日本語",
+        "reading": "にほんご",
+        "meaning_ko": "일본어",
+        "level": "N5"
+      }
+    ],
     "tags": ["기본", "명사"],
     "favorite": true,
+    "known": false,
     "correct_count": 0,
     "wrong_count": 0,
     "created_at": "2026-10-03T00:00:00+00:00",
-    "updated_at": "2026-10-03T00:00:00+00:00"
+    "updated_at": "2026-10-04T00:00:00+00:00"
   }
 ]
