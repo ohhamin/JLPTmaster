@@ -24,9 +24,10 @@ __pycache__/
 .venv/
 venv/
 
-# Env / local data
+# Env / local runtime state
 .env
 backend/data/*.tmp
+backend/data/progress.json
 
 # OS
 .DS_Store

@@ -3,6 +3,8 @@ name: Flutter Android Build
 on:
   push:
     branches: [master]
+  pull_request:
+    branches: [master]
   workflow_dispatch:
 
 jobs:
@@ -41,6 +43,9 @@ jobs:
 
       - name: Analyze
         run: flutter analyze
+
+      - name: Test
+        run: flutter test
 
       - name: Build release APK
         run: flutter build apk --release --dart-define=API_BASE_URL=https://jlptmaster.duckdns.org
