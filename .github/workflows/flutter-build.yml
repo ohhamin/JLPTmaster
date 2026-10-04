@@ -7,9 +7,6 @@ on:
     branches: [master]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build-apk:
     runs-on: ubuntu-latest
@@ -18,26 +15,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Apply leveling and TTS interaction migration
-        run: python tool/apply_leveling_and_tts_interaction.py
-
-      - name: Persist leveling source changes
-        if: github.event_name == 'push'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            backend/app/main.py \
-            lib/src/app.dart \
-            lib/src/services/study_progress_service.dart \
-            lib/src/screens/settings_screen.dart \
-            lib/src/screens/study_screen.dart \
-            lib/src/screens/word_detail_screen_v2.dart
-          if ! git diff --cached --quiet; then
-            git commit -m "feat: add account leveling and tactile TTS feedback"
-            git push origin HEAD:master
-          fi
 
       - name: Setup Java
         uses: actions/setup-java@v4
