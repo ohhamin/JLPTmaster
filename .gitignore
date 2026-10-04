@@ -28,6 +28,9 @@ venv/
 .env
 backend/data/*.tmp
 backend/data/progress.json
+backend/data/users.json
+backend/data/sessions.json
+backend/data/user_data/
 
 # OS
 .DS_Store

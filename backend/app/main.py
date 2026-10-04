@@ -2,18 +2,22 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import os
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+from .auth_store import AuthStore
 from .store import JsonWordStore
+from .user_data_store import UserDataStore
 
-app = FastAPI(title='JLPTmaster API', version='0.4.1')
+app = FastAPI(title='JLPTmaster API', version='0.5.0')
 store = JsonWordStore()
+auth_store = AuthStore()
+user_data = UserDataStore()
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,7 +33,6 @@ _STATE_UPDATE_FIELDS = {'favorite', 'known', 'correct_count', 'wrong_count'}
 
 
 def _block_start(chapter: int) -> int:
-    """Every six chapters starts a fresh cumulative study block."""
     return ((chapter - 1) // 6) * 6 + 1
 
 
@@ -47,14 +50,90 @@ def _scope_word(word: dict, chapter: int) -> dict:
     return scoped
 
 
-def _study_words(level: str, chapter: int) -> list[dict]:
-    start = _block_start(chapter)
-    return [
-        word
-        for word in store.list_words(known_chapter=chapter)
-        if word.get('level') == level
-        and start <= int(word.get('chapter') or 1) <= chapter
-    ]
+def _auth_token(authorization: str | None) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail='login required')
+    scheme, separator, token = authorization.partition(' ')
+    if separator != ' ' or scheme.lower() != 'bearer' or not token.strip():
+        raise HTTPException(status_code=401, detail='invalid authorization header')
+    return token.strip()
+
+
+def current_user(authorization: str | None = Header(default=None)) -> dict:
+    token = _auth_token(authorization)
+    user = auth_store.user_for_session(token)
+    if user is None:
+        raise HTTPException(status_code=401, detail='session expired or invalid')
+    user_data.ensure_user(user)
+    return user
+
+
+def current_token(authorization: str | None = Header(default=None)) -> str:
+    token = _auth_token(authorization)
+    if auth_store.user_for_session(token) is None:
+        raise HTTPException(status_code=401, detail='session expired or invalid')
+    return token
+
+
+def _base_words() -> list[dict]:
+    return store.list_words()
+
+
+def _merge_user_state(
+    word: dict,
+    user_id: str,
+    *,
+    known_chapter: int | None = None,
+    favorite_ids: set[str] | None = None,
+    known_ids: set[str] | None = None,
+    stats_map: dict[str, dict] | None = None,
+) -> dict:
+    merged = dict(word)
+    word_id = str(word.get('id', ''))
+    level = str(word.get('level', 'N5'))
+    chapter = known_chapter if known_chapter is not None else int(word.get('chapter') or 1)
+    favorites = favorite_ids if favorite_ids is not None else user_data.favorite_ids(user_id)
+    known = known_ids if known_ids is not None else user_data.known_ids(user_id, level, chapter)
+    stats = stats_map if stats_map is not None else user_data.stats_map(user_id)
+    state = stats.get(word_id, {})
+    merged['favorite'] = word_id in favorites
+    merged['known'] = word_id in known
+    merged['correct_count'] = int(state.get('correct_count') or 0)
+    merged['wrong_count'] = int(state.get('wrong_count') or 0)
+    merged['study_chapter'] = chapter
+    return merged
+
+
+def _user_words(user_id: str, known_chapter: int | None = None) -> list[dict]:
+    words = _base_words()
+    favorite_ids = user_data.favorite_ids(user_id)
+    stats_map = user_data.stats_map(user_id)
+    known_cache: dict[tuple[str, int], set[str]] = {}
+    result: list[dict] = []
+    for word in words:
+        level = str(word.get('level', 'N5'))
+        chapter = known_chapter if known_chapter is not None else int(word.get('chapter') or 1)
+        cache_key = (level, chapter)
+        known_ids = known_cache.setdefault(
+            cache_key,
+            user_data.known_ids(user_id, level, chapter),
+        )
+        result.append(
+            _merge_user_state(
+                word,
+                user_id,
+                known_chapter=chapter,
+                favorite_ids=favorite_ids,
+                known_ids=known_ids,
+                stats_map=stats_map,
+            )
+        )
+    return result
+
+
+class AuthCredentials(BaseModel):
+    username: str = Field(min_length=3, max_length=30, pattern=r'^[A-Za-z0-9_.-]+$')
+    password: str = Field(min_length=4, max_length=128)
 
 
 class ExampleWord(BaseModel):
@@ -114,17 +193,76 @@ class BatchStateUpdate(BaseModel):
     updates: list[WordStateUpdate] = Field(min_length=1, max_length=500)
 
 
+class RoundIncrement(BaseModel):
+    level: JlptLevel
+    chapter: int = Field(ge=0)
+
+
+class RoundSet(BaseModel):
+    level: JlptLevel
+    chapter: int = Field(ge=0)
+    value: int = Field(ge=0)
+
+
+class FinalKnownUpdate(BaseModel):
+    level: JlptLevel
+    word_ids: list[str] = Field(default_factory=list, max_length=10000)
+
+
+class SettingsUpdate(BaseModel):
+    settings: dict[str, Any]
+
+
 @app.get('/health')
 def health() -> dict[str, str]:
     return {'status': 'ok', 'service': 'jlptmaster-api'}
 
 
+@app.post('/api/auth/signup')
+def signup(payload: AuthCredentials) -> dict:
+    try:
+        first_user = auth_store.user_count() == 0
+        user = auth_store.create_user(payload.username, payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail='이미 사용 중인 아이디입니다.') from exc
+
+    user_data.ensure_user(user)
+    if first_user:
+        user_data.migrate_legacy_progress(
+            str(user['id']),
+            os.getenv('PROGRESS_JSON_PATH', '/app/data/progress.json'),
+        )
+    token = auth_store.create_session(str(user['id']))
+    return {'token': token, 'user': user}
+
+
+@app.post('/api/auth/login')
+def login(payload: AuthCredentials) -> dict:
+    user = auth_store.authenticate(payload.username, payload.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail='아이디 또는 비밀번호가 올바르지 않습니다.')
+    user_data.ensure_user(user)
+    token = auth_store.create_session(str(user['id']))
+    return {'token': token, 'user': user}
+
+
+@app.get('/api/auth/me')
+def auth_me(user: dict = Depends(current_user)) -> dict:
+    return {'user': user}
+
+
+@app.post('/api/auth/logout')
+def logout(token: str = Depends(current_token)) -> dict[str, bool]:
+    auth_store.delete_session(token)
+    return {'logged_out': True}
+
+
 @app.get('/api/levels')
-def get_levels() -> list[dict]:
-    # Build summaries from one in-memory snapshot. Calling _study_words for every
-    # chapter rebuilt/enriched all ~8k words each time and made this endpoint
-    # slower than the mobile client's timeout.
-    base_words = store.list_words()
+def get_levels(user: dict = Depends(current_user)) -> list[dict]:
+    user_id = str(user['id'])
+    base_words = _base_words()
+    favorites = user_data.favorite_ids(user_id)
+    known_map = user_data.known_map(user_id)
     result: list[dict] = []
     for level in _LEVEL_ORDER:
         level_words = [word for word in base_words if word.get('level') == level]
@@ -137,23 +275,21 @@ def get_levels() -> list[dict]:
                 for word in level_words
                 if start <= int(word.get('chapter') or 1) <= chapter
             ]
-            if study_words and all(
-                store.is_known(str(word.get('id', '')), chapter)
-                for word in study_words
-            ):
+            known_ids = known_map.get(f'{level}:{chapter}', set())
+            if study_words and all(str(word.get('id', '')) in known_ids for word in study_words):
                 completed += 1
 
-        favorite_surfaces = {
-            str(word.get('word', ''))
-            for word in level_words
-            if bool(word.get('favorite', False))
-        }
         result.append(
             {
                 'level': level,
                 'total': len(level_words),
-                'known': sum(1 for word in level_words if bool(word.get('known', False))),
-                'favorites': len(favorite_surfaces),
+                'known': sum(
+                    1
+                    for word in level_words
+                    if str(word.get('id', ''))
+                    in known_map.get(f"{level}:{int(word.get('chapter') or 1)}", set())
+                ),
+                'favorites': sum(1 for word in level_words if str(word.get('id', '')) in favorites),
                 'chapters': len(chapters),
                 'completed_chapters': completed,
             }
@@ -162,10 +298,15 @@ def get_levels() -> list[dict]:
 
 
 @app.get('/api/chapters')
-def get_chapters(level: JlptLevel) -> list[dict]:
-    # Reuse one snapshot and only look up the chapter-scoped known flag.
-    base_words = [word for word in store.list_words() if word.get('level') == level]
+def get_chapters(
+    level: JlptLevel,
+    user: dict = Depends(current_user),
+) -> list[dict]:
+    user_id = str(user['id'])
+    base_words = [word for word in _base_words() if word.get('level') == level]
     chapter_numbers = sorted({int(word.get('chapter') or 1) for word in base_words})
+    known_map = user_data.known_map(user_id)
+    rounds = user_data.rounds(user_id, level)
     result: list[dict] = []
     for chapter in chapter_numbers:
         start = _block_start(chapter)
@@ -174,11 +315,8 @@ def get_chapters(level: JlptLevel) -> list[dict]:
             for word in base_words
             if start <= int(word.get('chapter') or 1) <= chapter
         ]
-        known = sum(
-            1
-            for word in chapter_words
-            if store.is_known(str(word.get('id', '')), chapter)
-        )
+        known_ids = known_map.get(f'{level}:{chapter}', set())
+        known = sum(1 for word in chapter_words if str(word.get('id', '')) in known_ids)
         total = len(chapter_words)
         result.append(
             {
@@ -188,6 +326,7 @@ def get_chapters(level: JlptLevel) -> list[dict]:
                 'known': known,
                 'completed': total > 0 and known == total,
                 'block_start': _block_start(chapter),
+                'rounds': rounds.get(chapter, 0),
             }
         )
     return result
@@ -199,8 +338,10 @@ def get_words(
     chapter: int | None = Query(default=None, ge=1),
     favorite: bool | None = None,
     q: str | None = Query(default=None, max_length=100),
+    user: dict = Depends(current_user),
 ) -> list[dict]:
-    words = store.list_words(known_chapter=chapter) if chapter is not None else store.list_words()
+    user_id = str(user['id'])
+    words = _user_words(user_id, known_chapter=chapter)
     if level:
         words = [word for word in words if word.get('level') == level]
     if chapter is not None:
@@ -230,17 +371,23 @@ def get_words(
 def get_word(
     word_id: str,
     chapter: int | None = Query(default=None, ge=1),
+    user: dict = Depends(current_user),
 ) -> dict:
     base_id, scoped_chapter = _split_scoped_id(word_id)
     effective_chapter = chapter or scoped_chapter
-    word = store.get_word(base_id, known_chapter=effective_chapter)
-    if word is None:
+    base = store.get_word(base_id)
+    if base is None:
         raise HTTPException(status_code=404, detail='word not found')
-    return _scope_word(word, effective_chapter) if scoped_chapter is not None and effective_chapter else word
+    merged = _merge_user_state(
+        base,
+        str(user['id']),
+        known_chapter=effective_chapter,
+    )
+    return _scope_word(merged, effective_chapter) if scoped_chapter is not None and effective_chapter else merged
 
 
 @app.post('/api/words', status_code=201)
-def create_word(payload: WordCreate) -> dict:
+def create_word(payload: WordCreate, user: dict = Depends(current_user)) -> dict:
     now = datetime.now(timezone.utc).isoformat()
     word = {
         'id': str(uuid4()),
@@ -251,7 +398,13 @@ def create_word(payload: WordCreate) -> dict:
         'updated_at': now,
     }
     store.create_word(word)
-    return store.get_word(word['id']) or word
+    base = store.get_word(word['id']) or word
+    user_id = str(user['id'])
+    if payload.favorite:
+        user_data.set_favorite(user_id, word['id'], True)
+    if payload.known:
+        user_data.set_known(user_id, word['id'], payload.level, payload.chapter, True)
+    return _merge_user_state(base, user_id, known_chapter=payload.chapter)
 
 
 @app.put('/api/words/{word_id}')
@@ -259,59 +412,152 @@ def update_word(
     word_id: str,
     payload: WordUpdate,
     study_chapter: int | None = Query(default=None, ge=1),
+    user: dict = Depends(current_user),
 ) -> dict:
     base_id, scoped_chapter = _split_scoped_id(word_id)
-    effective_chapter = study_chapter or scoped_chapter
-    current = store.get_word(base_id, known_chapter=effective_chapter)
-    if current is None:
+    base = store.get_word(base_id)
+    if base is None:
         raise HTTPException(status_code=404, detail='word not found')
 
+    user_id = str(user['id'])
+    effective_chapter = study_chapter or scoped_chapter or int(base.get('chapter') or 1)
     changes = payload.model_dump(exclude_none=True)
     now = datetime.now(timezone.utc).isoformat()
-    if set(changes).issubset(_STATE_UPDATE_FIELDS):
-        state_update = {'word_id': base_id, **changes, 'updated_at': now}
-        if effective_chapter is not None:
-            state_update['chapter'] = effective_chapter
-        try:
-            result = store.update_states([state_update])[0]
-            return _scope_word(result, effective_chapter) if scoped_chapter is not None and effective_chapter else result
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail='word not found') from exc
 
-    changes['updated_at'] = now
-    updated = {**current, **changes}
-    if effective_chapter is not None:
-        updated['study_chapter'] = effective_chapter
+    if set(changes).issubset(_STATE_UPDATE_FIELDS):
+        if 'favorite' in changes:
+            user_data.set_favorite(user_id, base_id, bool(changes['favorite']))
+        if 'known' in changes:
+            user_data.set_known(
+                user_id,
+                base_id,
+                str(base.get('level', 'N5')),
+                effective_chapter,
+                bool(changes['known']),
+            )
+        stat_changes = {
+            key: changes[key]
+            for key in ('correct_count', 'wrong_count')
+            if key in changes
+        }
+        if stat_changes:
+            stat_changes['updated_at'] = now
+            user_data.update_stats(user_id, base_id, stat_changes)
+        merged = _merge_user_state(base, user_id, known_chapter=effective_chapter)
+        return _scope_word(merged, effective_chapter) if scoped_chapter is not None else merged
+
+    lexical_changes = {key: value for key, value in changes.items() if key not in _STATE_UPDATE_FIELDS}
+    lexical_changes['updated_at'] = now
+    updated = {**base, **lexical_changes}
     store.replace_word(base_id, updated)
-    result = store.get_word(base_id, known_chapter=effective_chapter) or updated
-    return _scope_word(result, effective_chapter) if scoped_chapter is not None and effective_chapter else result
+    refreshed = store.get_word(base_id) or updated
+    return _merge_user_state(refreshed, user_id, known_chapter=effective_chapter)
 
 
 @app.post('/api/progress/batch')
-def update_progress_batch(payload: BatchStateUpdate) -> dict:
-    now = datetime.now(timezone.utc).isoformat()
-    updates: list[dict] = []
+def update_progress_batch(
+    payload: BatchStateUpdate,
+    user: dict = Depends(current_user),
+) -> dict:
+    user_id = str(user['id'])
+    known_updates: list[tuple[str, str, int, bool]] = []
     for item in payload.updates:
         base_id, scoped_chapter = _split_scoped_id(item.word_id)
-        update = {
-            'word_id': base_id,
-            **item.model_dump(exclude={'word_id'}, exclude_none=True),
-            'updated_at': now,
-        }
-        if item.chapter is None and scoped_chapter is not None:
-            update['chapter'] = scoped_chapter
-        updates.append(update)
-    try:
-        updated = store.update_states(updates)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f'word not found: {exc.args[0]}') from exc
-    return {'updated': len(updated)}
+        base = store.get_word(base_id)
+        if base is None:
+            raise HTTPException(status_code=404, detail=f'word not found: {base_id}')
+        chapter = item.chapter or scoped_chapter or int(base.get('chapter') or 1)
+        level = str(base.get('level', 'N5'))
+        if item.known is not None:
+            known_updates.append((base_id, level, chapter, bool(item.known)))
+        if item.favorite is not None:
+            user_data.set_favorite(user_id, base_id, bool(item.favorite))
+        stat_changes: dict[str, Any] = {}
+        if item.correct_count is not None:
+            stat_changes['correct_count'] = item.correct_count
+        if item.wrong_count is not None:
+            stat_changes['wrong_count'] = item.wrong_count
+        if stat_changes:
+            stat_changes['updated_at'] = datetime.now(timezone.utc).isoformat()
+            user_data.update_stats(user_id, base_id, stat_changes)
+    if known_updates:
+        user_data.set_known_batch(user_id, known_updates)
+    return {'updated': len(payload.updates)}
+
+
+@app.get('/api/progress/rounds')
+def get_rounds(
+    level: JlptLevel,
+    user: dict = Depends(current_user),
+) -> dict:
+    rounds = user_data.rounds(str(user['id']), level)
+    return {'level': level, 'rounds': {str(key): value for key, value in rounds.items()}}
+
+
+@app.post('/api/progress/rounds/increment')
+def increment_round(
+    payload: RoundIncrement,
+    user: dict = Depends(current_user),
+) -> dict:
+    value = user_data.increment_round(
+        str(user['id']),
+        payload.level,
+        payload.chapter,
+    )
+    return {'level': payload.level, 'chapter': payload.chapter, 'rounds': value}
+
+
+@app.put('/api/progress/rounds')
+def set_round(
+    payload: RoundSet,
+    user: dict = Depends(current_user),
+) -> dict:
+    value = user_data.set_round(
+        str(user['id']),
+        payload.level,
+        payload.chapter,
+        payload.value,
+    )
+    return {'level': payload.level, 'chapter': payload.chapter, 'rounds': value}
+
+
+@app.get('/api/progress/final-known')
+def get_final_known(
+    level: JlptLevel,
+    user: dict = Depends(current_user),
+) -> dict:
+    ids = sorted(user_data.final_known(str(user['id']), level))
+    return {'level': level, 'word_ids': ids}
+
+
+@app.put('/api/progress/final-known')
+def set_final_known(
+    payload: FinalKnownUpdate,
+    user: dict = Depends(current_user),
+) -> dict:
+    ids = {str(item) for item in payload.word_ids if str(item).strip()}
+    user_data.set_final_known(str(user['id']), payload.level, ids)
+    return {'level': payload.level, 'word_ids': sorted(ids)}
+
+
+@app.get('/api/settings')
+def get_settings(user: dict = Depends(current_user)) -> dict:
+    return {'settings': user_data.settings(str(user['id']))}
+
+
+@app.patch('/api/settings')
+def update_settings(
+    payload: SettingsUpdate,
+    user: dict = Depends(current_user),
+) -> dict:
+    settings = user_data.update_settings(str(user['id']), payload.settings)
+    return {'settings': settings}
 
 
 @app.post('/api/words/{word_id}/explain')
-def explain_word(word_id: str) -> dict[str, str]:
+def explain_word(word_id: str, user: dict = Depends(current_user)) -> dict[str, str]:
     base_id, scoped_chapter = _split_scoped_id(word_id)
-    word = store.get_word(base_id, known_chapter=scoped_chapter)
+    word = store.get_word(base_id)
     if word is None:
         raise HTTPException(status_code=404, detail='word not found')
 
@@ -345,7 +591,7 @@ def explain_word(word_id: str) -> dict[str, str]:
             max_output_tokens=1600,
         )
         text = (response.output_text or '').strip()
-    except Exception as exc:  # pragma: no cover - depends on external API
+    except Exception as exc:
         raise HTTPException(
             status_code=502,
             detail=f'OpenAI request failed ({type(exc).__name__})',
@@ -357,7 +603,7 @@ def explain_word(word_id: str) -> dict[str, str]:
 
 
 @app.delete('/api/words/{word_id}')
-def delete_word(word_id: str) -> dict[str, bool]:
+def delete_word(word_id: str, user: dict = Depends(current_user)) -> dict[str, bool]:
     base_id, _ = _split_scoped_id(word_id)
     if not store.delete_word(base_id):
         raise HTTPException(status_code=404, detail='word not found')

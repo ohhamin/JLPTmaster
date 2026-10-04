@@ -1,6 +1,9 @@
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'api_service.dart';
+import 'session_store.dart';
+
 class TtsVoiceOption {
   const TtsVoiceOption({
     required this.name,
@@ -34,13 +37,15 @@ class TtsService {
 
   static final TtsService instance = TtsService._();
 
-  static const String _rateKey = 'tts_speech_rate_v1';
-  static const String _pitchKey = 'tts_pitch_v1';
-  static const String _volumeKey = 'tts_volume_v1';
-  static const String _voiceNameKey = 'tts_voice_name_v1';
-  static const String _voiceLocaleKey = 'tts_voice_locale_v1';
+  static const String _legacyRateKey = 'tts_speech_rate_v1';
+  static const String _legacyPitchKey = 'tts_pitch_v1';
+  static const String _legacyVolumeKey = 'tts_volume_v1';
+  static const String _legacyVoiceNameKey = 'tts_voice_name_v1';
+  static const String _legacyVoiceLocaleKey = 'tts_voice_locale_v1';
+  static const String _migrationPrefix = 'tts_server_migrated_v1';
 
   final FlutterTts _tts = FlutterTts();
+  final ApiService _api = ApiService();
   Future<void>? _initializing;
   bool _initialized = false;
 
@@ -50,11 +55,22 @@ class TtsService {
   String? _voiceName;
   String? _voiceLocale;
 
+  Future<void> resetForSession() async {
+    try {
+      await _tts.stop();
+    } catch (_) {}
+    _initialized = false;
+    _initializing = null;
+    _speechRate = 0.45;
+    _pitch = 1.0;
+    _volume = 1.0;
+    _voiceName = null;
+    _voiceLocale = null;
+  }
+
   Future<void> _ensureInitialized() async {
     if (_initialized) return;
-    if (_initializing != null) {
-      return _initializing!;
-    }
+    if (_initializing != null) return _initializing!;
 
     final initializing = _initialize();
     _initializing = initializing;
@@ -67,18 +83,22 @@ class TtsService {
   }
 
   Future<void> _initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    _speechRate = prefs.getDouble(_rateKey) ?? 0.45;
-    _pitch = prefs.getDouble(_pitchKey) ?? 1.0;
-    _volume = prefs.getDouble(_volumeKey) ?? 1.0;
-    _voiceName = prefs.getString(_voiceNameKey);
-    _voiceLocale = prefs.getString(_voiceLocaleKey);
+    final allSettings = await _api.fetchSettings();
+    final tts = Map<String, dynamic>.from(allSettings['tts'] as Map? ?? const {});
+    _speechRate = (tts['speech_rate'] as num?)?.toDouble() ?? 0.45;
+    _pitch = (tts['pitch'] as num?)?.toDouble() ?? 1.0;
+    _volume = (tts['volume'] as num?)?.toDouble() ?? 1.0;
+    _voiceName = tts['voice_name']?.toString();
+    _voiceLocale = tts['voice_locale']?.toString();
 
+    await _applyCurrentSettings();
+  }
+
+  Future<void> _applyCurrentSettings() async {
     await _tts.setLanguage('ja-JP');
     await _tts.setSpeechRate(_speechRate);
     await _tts.setVolume(_volume);
     await _tts.setPitch(_pitch);
-
     final voiceName = _voiceName;
     if (voiceName != null && voiceName.isNotEmpty) {
       await _tts.setVoice({
@@ -112,7 +132,6 @@ class TtsService {
       if (!locale.toLowerCase().startsWith('ja')) continue;
       result.add(TtsVoiceOption(name: name, locale: locale));
     }
-
     result.sort((a, b) => a.label.compareTo(b.label));
     return result;
   }
@@ -121,50 +140,106 @@ class TtsService {
     await _ensureInitialized();
     _speechRate = value;
     await _tts.setSpeechRate(value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_rateKey, value);
+    await _api.updateSettings({
+      'tts': {'speech_rate': value},
+    });
   }
 
   Future<void> setPitch(double value) async {
     await _ensureInitialized();
     _pitch = value;
     await _tts.setPitch(value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_pitchKey, value);
+    await _api.updateSettings({
+      'tts': {'pitch': value},
+    });
   }
 
   Future<void> setVolume(double value) async {
     await _ensureInitialized();
     _volume = value;
     await _tts.setVolume(value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_volumeKey, value);
+    await _api.updateSettings({
+      'tts': {'volume': value},
+    });
   }
 
   Future<void> setVoice(TtsVoiceOption? voice) async {
     await _ensureInitialized();
-    final prefs = await SharedPreferences.getInstance();
-
     if (voice == null) {
       _voiceName = null;
       _voiceLocale = null;
-      await prefs.remove(_voiceNameKey);
-      await prefs.remove(_voiceLocaleKey);
       await _tts.setLanguage('ja-JP');
+      await _api.updateSettings({
+        'tts': {
+          'voice_name': null,
+          'voice_locale': null,
+        },
+      });
       return;
     }
 
     _voiceName = voice.name;
     _voiceLocale = voice.locale;
     await _tts.setVoice({'name': voice.name, 'locale': voice.locale});
-    await prefs.setString(_voiceNameKey, voice.name);
-    await prefs.setString(_voiceLocaleKey, voice.locale);
+    await _api.updateSettings({
+      'tts': {
+        'voice_name': voice.name,
+        'voice_locale': voice.locale,
+      },
+    });
+  }
+
+  Future<void> migrateLegacyLocalSettings() async {
+    final userId = SessionStore.userId;
+    if (userId == null || userId.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final marker = '$_migrationPrefix:$userId';
+    if (prefs.getBool(marker) == true) return;
+
+    final hasLegacy = prefs.containsKey(_legacyRateKey) ||
+        prefs.containsKey(_legacyPitchKey) ||
+        prefs.containsKey(_legacyVolumeKey) ||
+        prefs.containsKey(_legacyVoiceNameKey) ||
+        prefs.containsKey(_legacyVoiceLocaleKey);
+
+    if (hasLegacy) {
+      final server = await _api.fetchSettings();
+      final serverTts = Map<String, dynamic>.from(server['tts'] as Map? ?? const {});
+      if (serverTts.isEmpty) {
+        final patch = <String, dynamic>{
+          if (prefs.getDouble(_legacyRateKey) != null)
+            'speech_rate': prefs.getDouble(_legacyRateKey),
+          if (prefs.getDouble(_legacyPitchKey) != null)
+            'pitch': prefs.getDouble(_legacyPitchKey),
+          if (prefs.getDouble(_legacyVolumeKey) != null)
+            'volume': prefs.getDouble(_legacyVolumeKey),
+          if (prefs.getString(_legacyVoiceNameKey) != null)
+            'voice_name': prefs.getString(_legacyVoiceNameKey),
+          if (prefs.getString(_legacyVoiceLocaleKey) != null)
+            'voice_locale': prefs.getString(_legacyVoiceLocaleKey),
+        };
+        if (patch.isNotEmpty) {
+          await _api.updateSettings({'tts': patch});
+        }
+      }
+    }
+
+    for (final key in const [
+      _legacyRateKey,
+      _legacyPitchKey,
+      _legacyVolumeKey,
+      _legacyVoiceNameKey,
+      _legacyVoiceLocaleKey,
+    ]) {
+      await prefs.remove(key);
+    }
+    await prefs.setBool(marker, true);
+    await resetForSession();
   }
 
   Future<void> speakJapanese(String text) async {
     final value = text.trim();
     if (value.isEmpty) return;
-
     await _ensureInitialized();
     await _tts.stop();
     await _tts.speak(value);

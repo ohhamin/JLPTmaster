@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/study_summary.dart';
 import '../models/word.dart';
+import 'session_store.dart';
 
 class ApiService {
   ApiService({http.Client? client}) : _client = client ?? http.Client();
@@ -29,7 +30,7 @@ class ApiService {
 
   Future<List<LevelSummary>> fetchLevels() async {
     final response = await _client
-        .get(Uri.parse('$baseUrl/api/levels'))
+        .get(Uri.parse('$baseUrl/api/levels'), headers: SessionStore.headers())
         .timeout(const Duration(seconds: 8));
     _ensureOk(response, '레벨 정보를 불러오지 못했습니다.');
     final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
@@ -42,7 +43,9 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/api/chapters').replace(
       queryParameters: {'level': level},
     );
-    final response = await _client.get(uri).timeout(const Duration(seconds: 8));
+    final response = await _client
+        .get(uri, headers: SessionStore.headers())
+        .timeout(const Duration(seconds: 8));
     _ensureOk(response, '챕터 정보를 불러오지 못했습니다.');
     final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
     return decoded
@@ -63,7 +66,9 @@ class ApiService {
     if (query != null && query.trim().isNotEmpty) params['q'] = query.trim();
 
     final uri = Uri.parse('$baseUrl/api/words').replace(queryParameters: params);
-    final response = await _client.get(uri).timeout(const Duration(seconds: 8));
+    final response = await _client
+        .get(uri, headers: SessionStore.headers())
+        .timeout(const Duration(seconds: 8));
     _ensureOk(response, '단어장을 불러오지 못했습니다.');
     final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
     return decoded.map((e) => Word.fromJson(e as Map<String, dynamic>)).toList();
@@ -73,7 +78,9 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/api/words/$wordId').replace(
       queryParameters: chapter == null ? null : {'chapter': chapter.toString()},
     );
-    final response = await _client.get(uri).timeout(const Duration(seconds: 8));
+    final response = await _client
+        .get(uri, headers: SessionStore.headers())
+        .timeout(const Duration(seconds: 8));
     _ensureOk(response, '단어 정보를 불러오지 못했습니다.');
     return Word.fromJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
@@ -96,7 +103,7 @@ class ApiService {
     final response = await _client
         .put(
           uri,
-          headers: const {'Content-Type': 'application/json; charset=utf-8'},
+          headers: SessionStore.headers(json: true),
           body: jsonEncode(payload),
         )
         .timeout(const Duration(seconds: 8));
@@ -149,7 +156,7 @@ class ApiService {
       final response = await _client
           .post(
             Uri.parse('$baseUrl/api/progress/batch'),
-            headers: const {'Content-Type': 'application/json; charset=utf-8'},
+            headers: SessionStore.headers(json: true),
             body: jsonEncode({'updates': states.values.toList()}),
           )
           .timeout(const Duration(seconds: 8));
@@ -174,9 +181,106 @@ class ApiService {
     }
   }
 
+  Future<Map<int, int>> fetchRounds(String level) async {
+    final uri = Uri.parse('$baseUrl/api/progress/rounds').replace(
+      queryParameters: {'level': level},
+    );
+    final response = await _client
+        .get(uri, headers: SessionStore.headers())
+        .timeout(const Duration(seconds: 8));
+    _ensureOk(response, '회독 정보를 불러오지 못했습니다.');
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    final raw = decoded['rounds'] as Map<String, dynamic>? ?? const {};
+    return {
+      for (final entry in raw.entries)
+        if (int.tryParse(entry.key) != null)
+          int.parse(entry.key): (entry.value as num?)?.toInt() ?? 0,
+    };
+  }
+
+  Future<int> incrementRound(String level, int chapter) async {
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/api/progress/rounds/increment'),
+          headers: SessionStore.headers(json: true),
+          body: jsonEncode({'level': level, 'chapter': chapter}),
+        )
+        .timeout(const Duration(seconds: 8));
+    _ensureOk(response, '회독 정보를 저장하지 못했습니다.');
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    return (decoded['rounds'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<int> setRound(String level, int chapter, int value) async {
+    final response = await _client
+        .put(
+          Uri.parse('$baseUrl/api/progress/rounds'),
+          headers: SessionStore.headers(json: true),
+          body: jsonEncode({
+            'level': level,
+            'chapter': chapter,
+            'value': value,
+          }),
+        )
+        .timeout(const Duration(seconds: 8));
+    _ensureOk(response, '회독 정보를 저장하지 못했습니다.');
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    return (decoded['rounds'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<Set<String>> fetchFinalKnown(String level) async {
+    final uri = Uri.parse('$baseUrl/api/progress/final-known').replace(
+      queryParameters: {'level': level},
+    );
+    final response = await _client
+        .get(uri, headers: SessionStore.headers())
+        .timeout(const Duration(seconds: 8));
+    _ensureOk(response, '전체 복습 상태를 불러오지 못했습니다.');
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    final ids = decoded['word_ids'] as List<dynamic>? ?? const [];
+    return ids.map((item) => item.toString()).toSet();
+  }
+
+  Future<void> setFinalKnown(String level, Set<String> wordIds) async {
+    final ids = wordIds.toList()..sort();
+    final response = await _client
+        .put(
+          Uri.parse('$baseUrl/api/progress/final-known'),
+          headers: SessionStore.headers(json: true),
+          body: jsonEncode({'level': level, 'word_ids': ids}),
+        )
+        .timeout(const Duration(seconds: 8));
+    _ensureOk(response, '전체 복습 상태를 저장하지 못했습니다.');
+  }
+
+  Future<Map<String, dynamic>> fetchSettings() async {
+    final response = await _client
+        .get(Uri.parse('$baseUrl/api/settings'), headers: SessionStore.headers())
+        .timeout(const Duration(seconds: 8));
+    _ensureOk(response, '설정을 불러오지 못했습니다.');
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    return Map<String, dynamic>.from(decoded['settings'] as Map? ?? const {});
+  }
+
+  Future<Map<String, dynamic>> updateSettings(Map<String, dynamic> changes) async {
+    final response = await _client
+        .patch(
+          Uri.parse('$baseUrl/api/settings'),
+          headers: SessionStore.headers(json: true),
+          body: jsonEncode({'settings': changes}),
+        )
+        .timeout(const Duration(seconds: 8));
+    _ensureOk(response, '설정을 저장하지 못했습니다.');
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    return Map<String, dynamic>.from(decoded['settings'] as Map? ?? const {});
+  }
+
   Future<String> explainWord(String wordId) async {
     final response = await _client
-        .post(Uri.parse('$baseUrl/api/words/$wordId/explain'))
+        .post(
+          Uri.parse('$baseUrl/api/words/$wordId/explain'),
+          headers: SessionStore.headers(),
+        )
         .timeout(const Duration(seconds: 60));
     _ensureOk(response, 'AI 설명을 불러오지 못했습니다.');
     final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;

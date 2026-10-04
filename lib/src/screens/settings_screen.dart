@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../services/session_store.dart';
 import '../services/tts_service.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({super.key, required this.onLogout});
+
+  final Future<void> Function() onLogout;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -14,6 +17,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _loading = true;
   bool _saving = false;
+  bool _loggingOut = false;
   String? _error;
 
   double _speechRate = 0.45;
@@ -39,15 +43,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final settings = await _tts.settings();
       final voices = await _tts.japaneseVoices();
       TtsVoiceOption? selected;
-
       for (final voice in voices) {
-        if (voice.name == settings.voiceName &&
-            voice.locale == settings.voiceLocale) {
+        if (voice.name == settings.voiceName && voice.locale == settings.voiceLocale) {
           selected = voice;
           break;
         }
       }
-
       if (!mounted) return;
       setState(() {
         _speechRate = settings.speechRate;
@@ -75,7 +76,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('TTS 설정 저장 실패: $error')),
+        SnackBar(content: Text('설정 저장 실패: $error')),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -93,38 +94,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _logout() async {
+    if (_loggingOut) return;
+    setState(() => _loggingOut = true);
+    await widget.onLogout();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_error != null) {
-      return ListView(
-        padding: const EdgeInsets.all(28),
-        children: [
-          const SizedBox(height: 140),
-          const Icon(Icons.record_voice_over_outlined, size: 44),
-          const SizedBox(height: 12),
-          const Text('TTS 설정을 불러오지 못했습니다.', textAlign: TextAlign.center),
-          const SizedBox(height: 8),
-          Text(_error!, textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          Center(
-            child: FilledButton.icon(
-              onPressed: _load,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('다시 시도'),
-            ),
-          ),
-        ],
-      );
-    }
-
     final scheme = Theme.of(context).colorScheme;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 34),
       children: [
+        _SettingsCard(
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(Icons.person_rounded, color: scheme.primary),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      SessionStore.username ?? '사용자',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '학습 기록과 설정이 서버에 동기화됩니다.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: _loggingOut ? null : _logout,
+                child: Text(_loggingOut ? '로그아웃 중' : '로그아웃'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
         Text(
           'TTS 설정',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -134,12 +161,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          '단어와 예문을 눌렀을 때 재생되는 일본어 음성을 조절해요.',
+          '이 설정도 계정에 저장되어 다른 기기에서 로그인해도 그대로 불러옵니다.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
                 height: 1.45,
               ),
         ),
+        if (_error != null) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: scheme.errorContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Expanded(child: Text('TTS 설정을 불러오지 못했습니다.\n$_error')),
+                IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 20),
         _SettingsCard(
           child: Column(
@@ -167,10 +210,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ..._voices.map(
                     (voice) => DropdownMenuItem<TtsVoiceOption>(
                       value: voice,
-                      child: Text(
-                        voice.label,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child: Text(voice.label, overflow: TextOverflow.ellipsis),
                     ),
                   ),
                 ],
@@ -236,7 +276,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SizedBox(
           height: 54,
           child: FilledButton.icon(
-            onPressed: _testVoice,
+            onPressed: _error == null ? _testVoice : null,
             icon: const Icon(Icons.volume_up_rounded),
             label: const Text(
               '현재 설정으로 음성 테스트',
@@ -262,9 +302,7 @@ class _SettingsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.7),
-        ),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.7)),
       ),
       child: child,
     );

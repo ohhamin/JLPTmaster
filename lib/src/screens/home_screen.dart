@@ -6,7 +6,9 @@ import 'level_home_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, required this.onLogout});
+
+  final Future<void> Function() onLogout;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -33,10 +35,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: IndexedStack(
         index: _index,
-        children: const [
-          LevelHomeScreen(),
-          FavoritesScreen(),
-          SettingsScreen(),
+        children: [
+          const LevelHomeScreen(),
+          const FavoritesScreen(),
+          SettingsScreen(onLogout: widget.onLogout),
         ],
       ),
       bottomNavigationBar: NavigationBar(
