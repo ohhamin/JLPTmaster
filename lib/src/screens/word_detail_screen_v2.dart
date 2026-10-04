@@ -17,6 +17,7 @@ class WordDetailScreenV2 extends StatefulWidget {
 class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
   final ApiService _api = ApiService();
   final TtsService _tts = TtsService.instance;
+
   late Word _word;
   bool _savingFavorite = false;
   bool _aiLoading = false;
@@ -61,12 +62,14 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
 
   Future<void> _toggleFavorite() async {
     if (_savingFavorite) return;
+
     final before = _word;
     final next = !before.favorite;
     setState(() {
       _savingFavorite = true;
       _word = _word.copyWith(favorite: next);
     });
+
     try {
       final updated = await _api.updateWord(before.id, favorite: next);
       if (!mounted) return;
@@ -89,10 +92,12 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
   Future<void> _requestAiExplanation() async {
     if (_aiLoading) return;
     setState(() => _aiLoading = true);
+
     try {
       final explanation = await _api.explainWord(_word.id);
       if (!mounted) return;
       setState(() => _aiLoading = false);
+
       await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
@@ -143,6 +148,7 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
 
   void _showRelatedWord(RelatedWord item) {
     final scheme = Theme.of(context).colorScheme;
+
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -157,7 +163,9 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
             children: [
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => _speakJapanese(item.reading.isNotEmpty ? item.reading : item.word),
+                onTap: () => _speakJapanese(
+                  item.reading.isNotEmpty ? item.reading : item.word,
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -266,7 +274,9 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(26),
-                border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.75)),
+                border: Border.all(
+                  color: scheme.outlineVariant.withValues(alpha: 0.75),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,13 +355,17 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
             const SizedBox(height: 14),
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: _word.exampleJa.isEmpty ? null : () => _speakJapanese(_word.exampleJa),
+              onTap: _word.exampleJa.isEmpty
+                  ? null
+                  : () => _speakJapanese(_word.exampleJa),
               child: Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   color: scheme.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.55)),
+                  border: Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: 0.55),
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,7 +384,9 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _word.exampleJa.isEmpty ? '예문이 없습니다.' : _word.exampleJa,
+                            _word.exampleJa.isEmpty
+                                ? '예문이 없습니다.'
+                                : _word.exampleJa,
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                   height: 1.55,
                                   fontWeight: FontWeight.w700,
@@ -454,7 +470,9 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
                       ],
                     ),
                     borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: scheme.primary.withValues(alpha: 0.28)),
+                    border: Border.all(
+                      color: scheme.primary.withValues(alpha: 0.28),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -465,7 +483,10 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
                           color: scheme.primary.withValues(alpha: 0.14),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(Icons.auto_awesome_rounded, color: scheme.primary),
+                        child: Icon(
+                          Icons.auto_awesome_rounded,
+                          color: scheme.primary,
+                        ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -586,7 +607,9 @@ class _RelatedTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: scheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+            border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: 0.6),
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -595,7 +618,11 @@ class _RelatedTile extends StatelessWidget {
                 children: [
                   if (item.level != null) _SmallBadge(text: item.level!),
                   const Spacer(),
-                  Icon(Icons.north_east_rounded, size: 16, color: scheme.onSurfaceVariant),
+                  Icon(
+                    Icons.north_east_rounded,
+                    size: 16,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ],
               ),
               const Spacer(),
@@ -609,7 +636,9 @@ class _RelatedTile extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                [item.reading, item.meaningKo].where((value) => value.isNotEmpty).join(' · '),
+                [item.reading, item.meaningKo]
+                    .where((value) => value.isNotEmpty)
+                    .join(' · '),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
