@@ -23,6 +23,8 @@ class AppSceneBackground extends StatelessWidget {
         ? 'assets/scenes/cave_dark.webp'
         : 'assets/scenes/meadow_light.webp';
 
+    // Keep one fixed illustration behind each route so scrolling cards remain
+    // crisp while the meadow/cave world stays visually stable.
     return Stack(
       fit: StackFit.expand,
       children: [
