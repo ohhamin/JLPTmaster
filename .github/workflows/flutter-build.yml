@@ -96,6 +96,28 @@ jobs:
               print(f'{destination}: {size}x{size}')
           PY
 
+      - name: Apply approved dark cave artwork
+        run: |
+          cat \
+            assets/scenes/cave_dark.user.part-00 \
+            assets/scenes/cave_dark.user.part-01 \
+            assets/scenes/cave_dark.user.part-02 \
+            assets/scenes/cave_dark.user.part-03 \
+            assets/scenes/cave_dark.user.part-04 \
+            assets/scenes/cave_dark.user.part-05 \
+            assets/scenes/cave_dark.user.part-06 \
+            assets/scenes/cave_dark.user.part-07 \
+            | base64 --decode > assets/scenes/cave_dark.webp
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+
+          path = Path('assets/scenes/cave_dark.webp')
+          image = Image.open(path)
+          print(f'dark cave artwork: {image.width}x{image.height}, mode={image.mode}')
+          assert image.width == 864 and image.height == 1536
+          PY
+
       - name: Install dependencies
         run: flutter pub get
 
