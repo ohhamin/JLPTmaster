@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/word.dart';
 import '../services/api_service.dart';
+import '../theme/theme_controller.dart';
 
 class WordDetailScreen extends StatefulWidget {
   const WordDetailScreen({super.key, required this.word});
@@ -16,6 +17,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
   final ApiService _api = ApiService();
   late Word _word;
   bool _savingFavorite = false;
+  bool _savingKnown = false;
   bool _aiLoading = false;
 
   @override
@@ -29,20 +31,19 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     try {
       final fresh = await _api.fetchWord(widget.word.id);
       if (mounted) setState(() => _word = fresh);
-    } catch (_) {
-      // Keep the already loaded list item if a background refresh fails.
-    }
+    } catch (_) {}
   }
 
   Future<void> _toggleFavorite() async {
     if (_savingFavorite) return;
     final before = _word;
+    final next = !before.favorite;
     setState(() {
       _savingFavorite = true;
-      _word = _word.copyWith(favorite: !_word.favorite);
+      _word = _word.copyWith(favorite: next);
     });
     try {
-      final updated = await _api.updateWord(before.id, favorite: !before.favorite);
+      final updated = await _api.updateWord(before.id, favorite: next);
       if (!mounted) return;
       setState(() {
         _word = updated;
@@ -56,6 +57,30 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('즐겨찾기 저장 실패: $error')),
+      );
+    }
+  }
+
+  Future<void> _toggleKnown() async {
+    if (_savingKnown) return;
+    final before = _word;
+    final next = !before.known;
+    setState(() {
+      _savingKnown = true;
+      _word = _word.copyWith(known: next);
+    });
+    try {
+      await _api.queueWordState(before.id, known: next);
+      if (!mounted) return;
+      setState(() => _savingKnown = false);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _word = before;
+        _savingKnown = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('알고 있음 저장 실패: $error')),
       );
     }
   }
@@ -116,13 +141,15 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
   }
 
   void _showRelatedWord(RelatedWord item) {
+    final scheme = Theme.of(context).colorScheme;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 4, 24, 26),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,7 +172,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                       child: Text(
                         item.reading,
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: scheme.onSurfaceVariant,
                             ),
                       ),
                     ),
@@ -158,8 +185,42 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                 const SizedBox(height: 12),
                 Text(
                   item.meaningKo,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(height: 1.45),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        height: 1.45,
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
+              ],
+              if (item.exampleJa.isNotEmpty || item.exampleKo.isNotEmpty) ...[
+                const SizedBox(height: 22),
+                Divider(color: scheme.outlineVariant),
+                const SizedBox(height: 18),
+                Text(
+                  '예문',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                if (item.exampleJa.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    item.exampleJa,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          height: 1.55,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ],
+                if (item.exampleKo.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    item.exampleKo,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          height: 1.5,
+                        ),
+                  ),
+                ],
               ],
             ],
           ),
@@ -181,16 +242,9 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
           '단어 상세',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
-        actions: [
-          IconButton(
-            tooltip: _word.favorite ? '즐겨찾기 해제' : '즐겨찾기 추가',
-            onPressed: _savingFavorite ? null : _toggleFavorite,
-            icon: Icon(
-              _word.favorite ? Icons.star_rounded : Icons.star_border_rounded,
-              color: _word.favorite ? scheme.primary : null,
-            ),
-          ),
-          const SizedBox(width: 8),
+        actions: const [
+          ThemeToggleButton(),
+          SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -203,7 +257,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(26),
-                border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.58)),
+                border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.75)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,24 +268,29 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                       const SizedBox(width: 8),
                       _SmallBadge(text: 'CH ${_word.chapter.toString().padLeft(2, '0')}'),
                       const Spacer(),
-                      if (_word.known)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.check_circle_rounded, size: 16, color: scheme.primary),
-                            const SizedBox(width: 5),
-                            Text(
-                              '알고 있음',
-                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                    color: scheme.primary,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                            ),
-                          ],
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: _word.known ? '알고 있음 해제' : '알고 있음으로 표시',
+                        onPressed: _savingKnown ? null : _toggleKnown,
+                        icon: Icon(
+                          _word.known
+                              ? Icons.check_circle_rounded
+                              : Icons.check_circle_outline_rounded,
+                          color: _word.known ? scheme.primary : scheme.onSurfaceVariant,
                         ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: _word.favorite ? '즐겨찾기 해제' : '즐겨찾기 추가',
+                        onPressed: _savingFavorite ? null : _toggleFavorite,
+                        icon: Icon(
+                          _word.favorite ? Icons.star_rounded : Icons.star_border_rounded,
+                          color: _word.favorite ? scheme.primary : scheme.onSurfaceVariant,
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 22),
                   Text(
                     _word.word,
                     style: Theme.of(context).textTheme.displaySmall?.copyWith(
@@ -280,10 +339,11 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
             const _SectionLabel(number: '01', title: '예문'),
             const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.55)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -517,7 +577,7 @@ class _RelatedTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: scheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -526,7 +586,7 @@ class _RelatedTile extends StatelessWidget {
                 children: [
                   if (item.level != null) _SmallBadge(text: item.level!),
                   const Spacer(),
-                  Icon(Icons.north_east_rounded, size: 15, color: scheme.onSurfaceVariant),
+                  Icon(Icons.north_east_rounded, size: 16, color: scheme.onSurfaceVariant),
                 ],
               ),
               const Spacer(),
@@ -540,7 +600,7 @@ class _RelatedTile extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                [item.reading, item.meaningKo].where((text) => text.isNotEmpty).join(' · '),
+                [item.reading, item.meaningKo].where((value) => value.isNotEmpty).join(' · '),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(

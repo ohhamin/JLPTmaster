@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -14,6 +15,10 @@ class ApiService {
   );
 
   final http.Client _client;
+  final Map<String, Map<String, dynamic>> _pendingStates = {};
+  final Map<String, List<Completer<void>>> _pendingWaiters = {};
+  Timer? _stateTimer;
+  bool _flushing = false;
 
   Future<bool> health() async {
     final response = await _client
@@ -94,6 +99,73 @@ class ApiService {
     return Word.fromJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );
+  }
+
+  Future<void> queueWordState(
+    String wordId, {
+    bool? favorite,
+    bool? known,
+  }) {
+    final payload = _pendingStates.putIfAbsent(wordId, () => <String, dynamic>{});
+    if (favorite != null) payload['favorite'] = favorite;
+    if (known != null) payload['known'] = known;
+
+    final completer = Completer<void>();
+    _pendingWaiters.putIfAbsent(wordId, () => <Completer<void>>[]).add(completer);
+    _stateTimer?.cancel();
+    _stateTimer = Timer(const Duration(milliseconds: 120), _flushStates);
+    return completer.future;
+  }
+
+  Future<void> _flushStates() async {
+    if (_flushing || _pendingStates.isEmpty) return;
+    _flushing = true;
+
+    final states = Map<String, Map<String, dynamic>>.fromEntries(
+      _pendingStates.entries.map(
+        (entry) => MapEntry(entry.key, Map<String, dynamic>.from(entry.value)),
+      ),
+    );
+    final waiters = <String, List<Completer<void>>>{
+      for (final id in states.keys)
+        id: List<Completer<void>>.from(_pendingWaiters[id] ?? const []),
+    };
+    for (final id in states.keys) {
+      _pendingStates.remove(id);
+      _pendingWaiters.remove(id);
+    }
+
+    try {
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/api/progress/batch'),
+            headers: const {'Content-Type': 'application/json; charset=utf-8'},
+            body: jsonEncode({
+              'updates': states.entries
+                  .map((entry) => {'word_id': entry.key, ...entry.value})
+                  .toList(),
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+      _ensureOk(response, '학습 상태를 저장하지 못했습니다.');
+      for (final list in waiters.values) {
+        for (final completer in list) {
+          if (!completer.isCompleted) completer.complete();
+        }
+      }
+    } catch (error, stack) {
+      for (final list in waiters.values) {
+        for (final completer in list) {
+          if (!completer.isCompleted) completer.completeError(error, stack);
+        }
+      }
+    } finally {
+      _flushing = false;
+      if (_pendingStates.isNotEmpty) {
+        _stateTimer?.cancel();
+        _stateTimer = Timer(const Duration(milliseconds: 80), _flushStates);
+      }
+    }
   }
 
   Future<String> explainWord(String wordId) async {

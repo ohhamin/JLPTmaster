@@ -5,6 +5,8 @@ class RelatedWord {
     this.reading = '',
     this.meaningKo = '',
     this.level,
+    this.exampleJa = '',
+    this.exampleKo = '',
   });
 
   final String? id;
@@ -12,6 +14,8 @@ class RelatedWord {
   final String reading;
   final String meaningKo;
   final String? level;
+  final String exampleJa;
+  final String exampleKo;
 
   factory RelatedWord.fromJson(Map<String, dynamic> json) => RelatedWord(
         id: json['id'] as String?,
@@ -19,6 +23,8 @@ class RelatedWord {
         reading: json['reading'] as String? ?? '',
         meaningKo: json['meaning_ko'] as String? ?? '',
         level: json['level'] as String?,
+        exampleJa: json['example_ja'] as String? ?? '',
+        exampleKo: json['example_ko'] as String? ?? '',
       );
 }
 
@@ -59,11 +65,7 @@ class Word {
   final int correctCount;
   final int wrongCount;
 
-  Word copyWith({
-    bool? favorite,
-    bool? known,
-  }) =>
-      Word(
+  Word copyWith({bool? favorite, bool? known}) => Word(
         id: id,
         word: word,
         reading: reading,

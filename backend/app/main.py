@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from .store import JsonWordStore
 
-app = FastAPI(title='JLPTmaster API', version='0.2.0')
+app = FastAPI(title='JLPTmaster API', version='0.3.0')
 store = JsonWordStore()
 
 app.add_middleware(
@@ -25,6 +25,7 @@ app.add_middleware(
 
 JlptLevel = Literal['N5', 'N4', 'N3', 'N2', 'N1']
 _LEVEL_ORDER: tuple[JlptLevel, ...] = ('N5', 'N4', 'N3', 'N2', 'N1')
+_STATE_UPDATE_FIELDS = {'favorite', 'known', 'correct_count', 'wrong_count'}
 
 
 class ExampleWord(BaseModel):
@@ -33,6 +34,8 @@ class ExampleWord(BaseModel):
     reading: str = Field(default='', max_length=120)
     meaning_ko: str = Field(default='', max_length=300)
     level: JlptLevel | None = None
+    example_ja: str = Field(default='', max_length=500)
+    example_ko: str = Field(default='', max_length=500)
 
 
 class WordCreate(BaseModel):
@@ -67,6 +70,18 @@ class WordUpdate(BaseModel):
     known: bool | None = None
     correct_count: int | None = Field(default=None, ge=0)
     wrong_count: int | None = Field(default=None, ge=0)
+
+
+class WordStateUpdate(BaseModel):
+    word_id: str = Field(min_length=1, max_length=120)
+    favorite: bool | None = None
+    known: bool | None = None
+    correct_count: int | None = Field(default=None, ge=0)
+    wrong_count: int | None = Field(default=None, ge=0)
+
+
+class BatchStateUpdate(BaseModel):
+    updates: list[WordStateUpdate] = Field(min_length=1, max_length=250)
 
 
 @app.get('/health')
@@ -166,11 +181,38 @@ def update_word(word_id: str, payload: WordUpdate) -> dict:
     current = store.get_word(word_id)
     if current is None:
         raise HTTPException(status_code=404, detail='word not found')
+
     changes = payload.model_dump(exclude_none=True)
-    changes['updated_at'] = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc).isoformat()
+    if set(changes).issubset(_STATE_UPDATE_FIELDS):
+        state_update = {'word_id': word_id, **changes, 'updated_at': now}
+        try:
+            return store.update_states([state_update])[0]
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail='word not found') from exc
+
+    changes['updated_at'] = now
     updated = {**current, **changes}
     store.replace_word(word_id, updated)
-    return updated
+    return store.get_word(word_id) or updated
+
+
+@app.post('/api/progress/batch')
+def update_progress_batch(payload: BatchStateUpdate) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    updates = [
+        {
+            'word_id': item.word_id,
+            **item.model_dump(exclude={'word_id'}, exclude_none=True),
+            'updated_at': now,
+        }
+        for item in payload.updates
+    ]
+    try:
+        updated = store.update_states(updates)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f'word not found: {exc.args[0]}') from exc
+    return {'updated': len(updated)}
 
 
 @app.post('/api/words/{word_id}/explain')
