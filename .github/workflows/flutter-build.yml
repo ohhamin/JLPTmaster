@@ -31,12 +31,32 @@ jobs:
       - name: Generate Android project
         run: flutter create . --project-name jlptmaster --org com.jlptmaster --platforms=android
 
-      - name: Ensure Android internet permission
+      - name: Ensure Android permissions and TTS discovery
         run: |
-          if ! grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml; then
-            sed -i '2i\    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
-          fi
-          grep -n 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          text = path.read_text()
+
+          internet = '<uses-permission android:name="android.permission.INTERNET" />'
+          if 'android.permission.INTERNET' not in text:
+              text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+                                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    ' + internet)
+
+          tts_query = '''        <intent>
+              <action android:name="android.intent.action.TTS_SERVICE"/>
+          </intent>
+          '''
+          if 'android.intent.action.TTS_SERVICE' not in text:
+              if '</queries>' in text:
+                  text = text.replace('</queries>', tts_query + '</queries>')
+              else:
+                  text = text.replace('</manifest>', '    <queries>\n' + tts_query + '    </queries>\n</manifest>')
+
+          path.write_text(text)
+          PY
+          grep -n 'android.permission.INTERNET\|android.intent.action.TTS_SERVICE' android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
         run: flutter pub get
