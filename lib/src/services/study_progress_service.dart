@@ -41,6 +41,8 @@ class StudyProgressService {
   Future<void> clearFinalKnown(String level) =>
       _api.setFinalKnown(level, <String>{});
 
+  /// The pre-login prototype stored round/final-known test values locally.
+  /// They are intentionally discarded now that the server is the source of truth.
   Future<void> migrateLegacyLocalState() async {
     final userId = SessionStore.userId;
     if (userId == null || userId.isEmpty) return;
@@ -49,43 +51,7 @@ class StudyProgressService {
     final marker = '$_migrationPrefix:$userId';
     if (prefs.getBool(marker) == true) return;
 
-    final remoteByLevel = <String, Map<int, int>>{};
     final keys = prefs.getKeys().toList();
-
-    for (final key in keys.where((key) => key.startsWith('$_legacyRoundPrefix:'))) {
-      final parts = key.split(':');
-      if (parts.length != 3) continue;
-      final level = parts[1].toUpperCase();
-      final chapter = int.tryParse(parts[2]);
-      final localValue = prefs.getInt(key);
-      if (chapter == null || localValue == null || localValue <= 0) continue;
-
-      final remote = remoteByLevel.putIfAbsent(level, () => <int, int>{});
-      if (remote.isEmpty) {
-        remote.addAll(await _api.fetchRounds(level));
-      }
-      final next = localValue > (remote[chapter] ?? 0)
-          ? localValue
-          : (remote[chapter] ?? 0);
-      if (next != (remote[chapter] ?? 0)) {
-        await _api.setRound(level, chapter, next);
-        remote[chapter] = next;
-      }
-    }
-
-    for (final key in keys.where((key) => key.startsWith('$_legacyFinalKnownPrefix:'))) {
-      final parts = key.split(':');
-      if (parts.length != 2) continue;
-      final level = parts[1].toUpperCase();
-      final localIds = (prefs.getStringList(key) ?? const <String>[]).toSet();
-      if (localIds.isEmpty) continue;
-      final remoteIds = await _api.fetchFinalKnown(level);
-      final merged = <String>{...remoteIds, ...localIds};
-      if (merged.length != remoteIds.length) {
-        await _api.setFinalKnown(level, merged);
-      }
-    }
-
     for (final key in keys) {
       if (key.startsWith('$_legacyRoundPrefix:') ||
           key.startsWith('$_legacyFinalKnownPrefix:')) {
