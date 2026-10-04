@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/word.dart';
 import '../services/api_service.dart';
+import '../services/tts_service.dart';
 import '../theme/theme_controller.dart';
 
 class StudyScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class StudyScreen extends StatefulWidget {
 
 class _StudyScreenState extends State<StudyScreen> {
   final ApiService _api = ApiService();
+  final TtsService _tts = TtsService.instance;
   List<Word> _words = const [];
   List<String> _queue = const [];
   bool _loading = true;
@@ -36,6 +38,12 @@ class _StudyScreenState extends State<StudyScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _tts.stop();
+    super.dispose();
+  }
+
   int get _knownCount => _words.where((word) => word.known).length;
 
   Word get _current {
@@ -44,6 +52,23 @@ class _StudyScreenState extends State<StudyScreen> {
     }
     final currentId = _queue.first;
     return _words.firstWhere((word) => word.id == currentId);
+  }
+
+  Future<void> _speakJapanese(String text) async {
+    try {
+      await _tts.speakJapanese(text);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('음성 재생을 사용할 수 없습니다. 기기 TTS의 일본어 음성을 확인해 주세요.'),
+        ),
+      );
+    }
+  }
+
+  void _speakWord(Word word) {
+    _speakJapanese(word.reading.isNotEmpty ? word.reading : word.word);
   }
 
   Future<void> _load() async {
@@ -115,6 +140,7 @@ class _StudyScreenState extends State<StudyScreen> {
 
   void _studyAgain() {
     if (_queue.isEmpty) return;
+    _tts.stop();
     setState(() {
       if (_queue.length > 1) {
         final currentId = _queue.first;
@@ -128,6 +154,7 @@ class _StudyScreenState extends State<StudyScreen> {
   Future<void> _markKnown() async {
     if (_queue.isEmpty) return;
     final current = _current;
+    _tts.stop();
 
     setState(() {
       _replaceWord(current.copyWith(known: true));
@@ -154,6 +181,7 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   void _startReview() {
+    _tts.stop();
     setState(() {
       _reviewMode = true;
       _reviewIndex = 0;
@@ -164,6 +192,7 @@ class _StudyScreenState extends State<StudyScreen> {
 
   void _nextReviewWord() {
     if (_words.isEmpty) return;
+    _tts.stop();
     setState(() {
       _reviewIndex = (_reviewIndex + 1) % _words.length;
       _showReading = false;
@@ -325,16 +354,24 @@ class _StudyScreenState extends State<StudyScreen> {
                                 ),
                                 const SizedBox(height: 8),
                               ],
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  current.word,
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                                        fontSize: 68,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: -2.2,
-                                      ),
+                              Semantics(
+                                button: true,
+                                label: '${current.word} 발음 듣기',
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () => _speakWord(current),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      current.word,
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                                            fontSize: 68,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: -2.2,
+                                          ),
+                                    ),
+                                  ),
                                 ),
                               ),
                               if (current.meaningKo.isNotEmpty) ...[
@@ -373,12 +410,22 @@ class _StudyScreenState extends State<StudyScreen> {
                               const SizedBox(height: 14),
                               Align(
                                 alignment: Alignment.centerLeft,
-                                child: Text(
-                                  current.exampleJa.isEmpty ? '예문이 없습니다.' : current.exampleJa,
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                        height: 1.55,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                child: Semantics(
+                                  button: current.exampleJa.isNotEmpty,
+                                  label: current.exampleJa.isEmpty ? null : '예문 발음 듣기',
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: current.exampleJa.isEmpty
+                                        ? null
+                                        : () => _speakJapanese(current.exampleJa),
+                                    child: Text(
+                                      current.exampleJa.isEmpty ? '예문이 없습니다.' : current.exampleJa,
+                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                            height: 1.55,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  ),
                                 ),
                               ),
                               if (current.exampleReading.isNotEmpty) ...[
