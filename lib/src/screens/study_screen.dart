@@ -24,7 +24,7 @@ class _StudyScreenState extends State<StudyScreen> {
   bool _loading = true;
   bool _showReading = false;
   bool _showMeaning = false;
-  bool _submitting = false;
+  bool _savingFavorite = false;
   String? _error;
 
   @override
@@ -78,18 +78,27 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   Future<void> _toggleFavorite() async {
-    if (_submitting || _queue.isEmpty) return;
+    if (_savingFavorite || _queue.isEmpty) return;
     final current = _current;
     final next = !current.favorite;
-    setState(() => _replaceWord(current.copyWith(favorite: next)));
+    setState(() {
+      _savingFavorite = true;
+      _replaceWord(current.copyWith(favorite: next));
+    });
 
     try {
       final updated = await _api.updateWord(current.id, favorite: next);
       if (!mounted) return;
-      setState(() => _replaceWord(updated));
+      setState(() {
+        _replaceWord(updated);
+        _savingFavorite = false;
+      });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _replaceWord(current));
+      setState(() {
+        _replaceWord(current);
+        _savingFavorite = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('즐겨찾기 저장 실패: $error')),
       );
@@ -97,7 +106,7 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   void _studyAgain() {
-    if (_submitting || _queue.isEmpty) return;
+    if (_queue.isEmpty) return;
     setState(() {
       if (_queue.length > 1) {
         final currentId = _queue.first;
@@ -109,30 +118,38 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   Future<void> _markKnown() async {
-    if (_submitting || _queue.isEmpty) return;
+    if (_queue.isEmpty) return;
+
     final current = _current;
-    setState(() => _submitting = true);
+    final completedAfterThis = _queue.length == 1;
+
+    // Optimistic update: move to the next word immediately, then persist in the
+    // background. This keeps the study rhythm independent of network latency.
+    setState(() {
+      _replaceWord(current.copyWith(known: true));
+      _queue = _queue.skip(1).toList();
+      _showReading = false;
+      _showMeaning = false;
+    });
 
     try {
-      final updated = current.known
-          ? current
-          : await _api.updateWord(current.id, known: true);
-      if (!mounted) return;
+      if (!current.known) {
+        final updated = await _api.updateWord(current.id, known: true);
+        if (!mounted) return;
+        setState(() => _replaceWord(updated));
+      }
 
-      setState(() {
-        _replaceWord(updated);
-        _queue = _queue.skip(1).toList();
-        _showReading = false;
-        _showMeaning = false;
-        _submitting = false;
-      });
-
-      if (_queue.isEmpty && mounted) {
+      if (completedAfterThis && mounted) {
         await _showCompleteDialog();
       }
     } catch (error) {
       if (!mounted) return;
-      setState(() => _submitting = false);
+      setState(() {
+        _replaceWord(current);
+        if (!_queue.contains(current.id)) {
+          _queue = [..._queue, current.id];
+        }
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('학습 상태 저장 실패: $error')),
       );
@@ -233,7 +250,7 @@ class _StudyScreenState extends State<StudyScreen> {
                   color: scheme.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
-                    color: scheme.outlineVariant.withValues(alpha: 0.62),
+                    color: scheme.outlineVariant.withValues(alpha: 0.9),
                   ),
                 ),
                 child: Padding(
@@ -259,7 +276,7 @@ class _StudyScreenState extends State<StudyScreen> {
                           const Spacer(),
                           IconButton(
                             tooltip: current.favorite ? '즐겨찾기 해제' : '즐겨찾기 추가',
-                            onPressed: _toggleFavorite,
+                            onPressed: _savingFavorite ? null : _toggleFavorite,
                             icon: Icon(
                               current.favorite ? Icons.star_rounded : Icons.star_border_rounded,
                               color: current.favorite ? scheme.primary : scheme.onSurfaceVariant,
@@ -269,17 +286,21 @@ class _StudyScreenState extends State<StudyScreen> {
                       ),
                       Expanded(
                         child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(8, 22, 8, 24),
+                          padding: const EdgeInsets.fromLTRB(8, 18, 8, 20),
                           child: Column(
                             children: [
-                              if (_showReading && current.reading.isNotEmpty) ...[
-                                Text(
-                                  current.reading,
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                              if (current.reading.isNotEmpty) ...[
+                                AnimatedOpacity(
+                                  opacity: _showReading ? 1 : 0,
+                                  duration: const Duration(milliseconds: 140),
+                                  child: Text(
+                                    current.reading,
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                               ],
@@ -295,17 +316,21 @@ class _StudyScreenState extends State<StudyScreen> {
                                       ),
                                 ),
                               ),
-                              if (_showMeaning && current.meaningKo.isNotEmpty) ...[
-                                const SizedBox(height: 14),
-                                Text(
-                                  current.meaningKo,
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                        fontWeight: FontWeight.w800,
-                                      ),
+                              if (current.meaningKo.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                AnimatedOpacity(
+                                  opacity: _showMeaning ? 1 : 0,
+                                  duration: const Duration(milliseconds: 140),
+                                  child: Text(
+                                    current.meaningKo,
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
                                 ),
                               ],
-                              const SizedBox(height: 40),
+                              const SizedBox(height: 28),
                               Row(
                                 children: [
                                   Container(
@@ -335,30 +360,38 @@ class _StudyScreenState extends State<StudyScreen> {
                                       ),
                                 ),
                               ),
-                              if (_showReading && current.exampleReading.isNotEmpty) ...[
+                              if (current.exampleReading.isNotEmpty) ...[
                                 const SizedBox(height: 10),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    current.exampleReading,
-                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                          color: scheme.onSurfaceVariant,
-                                          height: 1.5,
-                                        ),
+                                AnimatedOpacity(
+                                  opacity: _showReading ? 1 : 0,
+                                  duration: const Duration(milliseconds: 140),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      current.exampleReading,
+                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                            height: 1.5,
+                                          ),
+                                    ),
                                   ),
                                 ),
                               ],
-                              if (_showMeaning && current.exampleKo.isNotEmpty) ...[
+                              if (current.exampleKo.isNotEmpty) ...[
                                 const SizedBox(height: 10),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    current.exampleKo,
-                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                          color: scheme.onSurfaceVariant,
-                                          height: 1.5,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                AnimatedOpacity(
+                                  opacity: _showMeaning ? 1 : 0,
+                                  duration: const Duration(milliseconds: 140),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      current.exampleKo,
+                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                            height: 1.5,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -385,7 +418,7 @@ class _StudyScreenState extends State<StudyScreen> {
                   child: SizedBox(
                     height: 60,
                     child: OutlinedButton.icon(
-                      onPressed: _submitting ? null : _studyAgain,
+                      onPressed: _studyAgain,
                       icon: const Icon(Icons.replay_rounded, size: 20),
                       label: const Text(
                         '다시 학습',
@@ -399,14 +432,8 @@ class _StudyScreenState extends State<StudyScreen> {
                   child: SizedBox(
                     height: 60,
                     child: FilledButton.icon(
-                      onPressed: _submitting ? null : _markKnown,
-                      icon: _submitting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.check_rounded, size: 20),
+                      onPressed: _markKnown,
+                      icon: const Icon(Icons.check_rounded, size: 20),
                       label: const Text(
                         '알고 있음',
                         style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
@@ -518,19 +545,14 @@ class _RevealBar extends StatelessWidget {
               onTap: onMeaning,
             ),
           ),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 160),
-            child: hasReveal
-                ? Padding(
-                    key: const ValueKey('reset'),
-                    padding: const EdgeInsets.only(left: 4),
-                    child: IconButton(
-                      tooltip: '가리기',
-                      onPressed: onReset,
-                      icon: const Icon(Icons.undo_rounded),
-                    ),
-                  )
-                : const SizedBox.shrink(key: ValueKey('empty')),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 44,
+            child: IconButton(
+              tooltip: hasReveal ? '가리기' : '표시된 내용 없음',
+              onPressed: hasReveal ? onReset : null,
+              icon: const Icon(Icons.undo_rounded),
+            ),
           ),
         ],
       ),
@@ -555,7 +577,7 @@ class _RevealChoice extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: selected ? scheme.surface : Colors.transparent,
+      color: selected ? scheme.surfaceContainerLow : Colors.transparent,
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         borderRadius: BorderRadius.circular(13),
