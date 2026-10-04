@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/word.dart';
 import '../services/api_service.dart';
 import '../services/tts_service.dart';
+import '../theme/app_typography.dart';
 import '../theme/theme_controller.dart';
 
 class WordDetailScreenV2 extends StatefulWidget {
@@ -172,8 +173,8 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
                     Flexible(
                       child: Text(
                         item.word,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
+                        style: AppTypography.japanese(
+                              Theme.of(context).textTheme.headlineMedium,
                             ),
                       ),
                     ),
@@ -183,7 +184,9 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
                         padding: const EdgeInsets.only(bottom: 3),
                         child: Text(
                           item.reading,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          style: AppTypography.japanese(
+                                Theme.of(context).textTheme.titleMedium,
+                              ).copyWith(
                                 color: scheme.onSurfaceVariant,
                               ),
                         ),
@@ -221,9 +224,10 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
                     onTap: () => _speakJapanese(item.exampleJa),
                     child: Text(
                       item.exampleJa,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            height: 1.55,
-                            fontWeight: FontWeight.w700,
+                      style: AppTypography.japanese(
+                            Theme.of(context).textTheme.titleMedium,
+                          ).copyWith(
+                            height: 1.60,
                           ),
                     ),
                   ),
@@ -305,18 +309,21 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
                       children: [
                         Text(
                           _word.word,
-                          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -1.2,
+                          style: AppTypography.japanese(
+                                Theme.of(context).textTheme.displaySmall,
+                              ).copyWith(
+                                height: 1.15,
+                                letterSpacing: -0.4,
                               ),
                         ),
                         if (_word.reading.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(
                             _word.reading,
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            style: AppTypography.japanese(
+                                  Theme.of(context).textTheme.titleLarge,
+                                ).copyWith(
                                   color: scheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
                                 ),
                           ),
                         ],
@@ -387,18 +394,21 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
                             _word.exampleJa.isEmpty
                                 ? '예문이 없습니다.'
                                 : _word.exampleJa,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  height: 1.55,
-                                  fontWeight: FontWeight.w700,
+                            style: AppTypography.japanese(
+                                  Theme.of(context).textTheme.titleMedium,
+                                ).copyWith(
+                                  height: 1.60,
                                 ),
                           ),
                           if (_word.exampleReading.isNotEmpty) ...[
                             const SizedBox(height: 10),
                             Text(
                               _word.exampleReading,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              style: AppTypography.japanese(
+                                    Theme.of(context).textTheme.bodyMedium,
+                                  ).copyWith(
                                     color: scheme.onSurfaceVariant,
-                                    height: 1.5,
+                                    height: 1.55,
                                   ),
                             ),
                           ],
@@ -630,8 +640,8 @@ class _RelatedTile extends StatelessWidget {
                 item.word,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
+                style: AppTypography.japanese(
+                      Theme.of(context).textTheme.titleMedium,
                     ),
               ),
               const SizedBox(height: 2),

@@ -4,6 +4,7 @@ import '../models/word.dart';
 import '../services/api_service.dart';
 import '../services/study_progress_service.dart';
 import '../services/tts_service.dart';
+import '../theme/app_typography.dart';
 import '../theme/theme_controller.dart';
 
 class StudyScreen extends StatefulWidget {
@@ -460,9 +461,10 @@ class _StudyScreenState extends State<StudyScreen> {
                                   child: Text(
                                     current.reading,
                                     textAlign: TextAlign.center,
-                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    style: AppTypography.japanese(
+                                          Theme.of(context).textTheme.titleLarge,
+                                        ).copyWith(
                                           color: scheme.onSurfaceVariant,
-                                          fontWeight: FontWeight.w600,
                                         ),
                                   ),
                                 ),
@@ -479,10 +481,12 @@ class _StudyScreenState extends State<StudyScreen> {
                                     child: Text(
                                       current.word,
                                       textAlign: TextAlign.center,
-                                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                                      style: AppTypography.japanese(
+                                            Theme.of(context).textTheme.displayLarge,
+                                          ).copyWith(
                                             fontSize: 68,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: -2.2,
+                                            height: 1.12,
+                                            letterSpacing: -0.6,
                                           ),
                                     ),
                                   ),
@@ -534,9 +538,10 @@ class _StudyScreenState extends State<StudyScreen> {
                                         : () => _speakJapanese(current.exampleJa),
                                     child: Text(
                                       current.exampleJa.isEmpty ? '예문이 없습니다.' : current.exampleJa,
-                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                            height: 1.55,
-                                            fontWeight: FontWeight.w600,
+                                      style: AppTypography.japanese(
+                                            Theme.of(context).textTheme.titleLarge,
+                                          ).copyWith(
+                                            height: 1.60,
                                           ),
                                     ),
                                   ),
@@ -551,9 +556,11 @@ class _StudyScreenState extends State<StudyScreen> {
                                     alignment: Alignment.centerLeft,
                                     child: Text(
                                       current.exampleReading,
-                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      style: AppTypography.japanese(
+                                            Theme.of(context).textTheme.bodyLarge,
+                                          ).copyWith(
                                             color: scheme.onSurfaceVariant,
-                                            height: 1.5,
+                                            height: 1.55,
                                           ),
                                     ),
                                   ),

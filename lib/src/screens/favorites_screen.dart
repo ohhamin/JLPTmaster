@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/word.dart';
 import '../services/api_service.dart';
+import '../theme/app_typography.dart';
 import 'word_detail_screen_v2.dart';
 
 class FavoritesScreen extends StatefulWidget {
@@ -197,8 +198,8 @@ class _FavoriteRow extends StatelessWidget {
                       word.word,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
+                      style: AppTypography.japanese(
+                            Theme.of(context).textTheme.titleMedium,
                           ),
                     ),
                     if (word.reading.isNotEmpty) ...[
@@ -207,9 +208,11 @@ class _FavoriteRow extends StatelessWidget {
                         word.reading,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
+                        style: AppTypography.japanese(
+                            Theme.of(context).textTheme.bodySmall,
+                          ).copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
                       ),
                     ],
                   ],
