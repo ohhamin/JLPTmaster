@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_typography.dart';
+
 class AppTheme {
   static const _seed = Color(0xFFFF8D67);
 
@@ -23,6 +25,7 @@ class AppTheme {
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
+      fontFamily: AppTypography.uiFontFamily,
       scaffoldBackgroundColor: scheme.surface,
       appBarTheme: AppBarTheme(
         elevation: 0,
