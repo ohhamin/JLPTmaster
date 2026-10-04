@@ -19,7 +19,6 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
   final TtsService _tts = TtsService.instance;
   late Word _word;
   bool _savingFavorite = false;
-  bool _savingKnown = false;
   bool _aiLoading = false;
 
   @override
@@ -37,7 +36,7 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
 
   Future<void> _refreshWord() async {
     try {
-      final fresh = await _api.fetchWord(widget.word.id, chapter: widget.word.chapter);
+      final fresh = await _api.fetchWord(widget.word.id);
       if (mounted) setState(() => _word = fresh);
     } catch (_) {}
   }
@@ -83,37 +82,6 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('즐겨찾기 저장 실패: $error')),
-      );
-    }
-  }
-
-  Future<void> _toggleKnown() async {
-    if (_savingKnown) return;
-    final before = _word;
-    final next = !before.known;
-    setState(() {
-      _savingKnown = true;
-      _word = _word.copyWith(known: next);
-    });
-    try {
-      final updated = await _api.updateWord(
-        before.id,
-        known: next,
-        chapter: before.chapter,
-      );
-      if (!mounted) return;
-      setState(() {
-        _word = updated;
-        _savingKnown = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _word = before;
-        _savingKnown = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('알고 있음 저장 실패: $error')),
       );
     }
   }
@@ -307,23 +275,6 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
                     children: [
                       _SmallBadge(text: _word.level),
                       const Spacer(),
-                      TextButton.icon(
-                        onPressed: _savingKnown ? null : _toggleKnown,
-                        icon: Icon(
-                          _word.known
-                              ? Icons.check_circle_rounded
-                              : Icons.check_circle_outline_rounded,
-                          size: 21,
-                          color: _word.known ? scheme.primary : scheme.onSurfaceVariant,
-                        ),
-                        label: Text(
-                          '알고 있음',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: _word.known ? scheme.primary : scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         tooltip: _word.favorite ? '즐겨찾기 해제' : '즐겨찾기 추가',
