@@ -24,6 +24,9 @@ class JlptMasterApp extends StatelessWidget {
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: themeMode,
+        builder: (context, child) => AppSceneBackground(
+          child: child ?? const SizedBox.shrink(),
+        ),
         home: const _AuthGate(),
       ),
     );
@@ -115,12 +118,9 @@ class _AuthGateState extends State<_AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const AppSceneBackground(
-        playful: true,
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Center(child: CircularProgressIndicator()),
-        ),
+      return const Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(child: CircularProgressIndicator()),
       );
     }
     if (!_authenticated) {
