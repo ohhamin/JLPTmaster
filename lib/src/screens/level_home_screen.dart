@@ -51,8 +51,9 @@ class _LevelHomeScreenState extends State<LevelHomeScreen> {
           }
 
           final levels = snapshot.data ?? const <LevelSummary>[];
-          final totalWords = levels.fold<int>(0, (sum, item) => sum + item.total);
-          final knownWords = levels.fold<int>(0, (sum, item) => sum + item.known);
+          final totalChapters = levels.fold<int>(0, (sum, item) => sum + item.chapters);
+          final completedChapters =
+              levels.fold<int>(0, (sum, item) => sum + item.completedChapters);
 
           return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -62,8 +63,8 @@ class _LevelHomeScreenState extends State<LevelHomeScreen> {
             itemBuilder: (context, index) {
               if (index == 0) {
                 return _LevelHeader(
-                  knownWords: knownWords,
-                  totalWords: totalWords,
+                  completedChapters: completedChapters,
+                  totalChapters: totalChapters,
                 );
               }
 
@@ -88,10 +89,13 @@ class _LevelHomeScreenState extends State<LevelHomeScreen> {
 }
 
 class _LevelHeader extends StatelessWidget {
-  const _LevelHeader({required this.knownWords, required this.totalWords});
+  const _LevelHeader({
+    required this.completedChapters,
+    required this.totalChapters,
+  });
 
-  final int knownWords;
-  final int totalWords;
+  final int completedChapters;
+  final int totalChapters;
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +112,7 @@ class _LevelHeader extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          '등급을 고르면 50단어 단위 챕터로 이어서 학습할 수 있어요.',
+          '6챕터 단위로 누적 복습하고, 다음 묶음에서 다시 50단어부터 시작해요.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
                 height: 1.45,
@@ -141,7 +145,7 @@ class _LevelHeader extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '$knownWords / $totalWords',
+                '$completedChapters / $totalChapters 챕터',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: scheme.onSurfaceVariant,
                       fontWeight: FontWeight.w800,
@@ -214,7 +218,7 @@ class _LevelCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 7),
                       Text(
-                        '${summary.known}개 알고 있음  ·  즐겨찾기 ${summary.favorites}',
+                        '${summary.completedChapters}/${summary.chapters} 챕터 완료  ·  즐겨찾기 ${summary.favorites}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: scheme.onSurfaceVariant,
                             ),
