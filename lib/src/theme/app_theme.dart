@@ -13,10 +13,10 @@ class AppTheme {
     );
     final isLight = brightness == Brightness.light;
     final scheme = baseScheme.copyWith(
-      surface: isLight ? const Color(0xFFF8F9FA) : const Color(0xFF111315),
+      surface: isLight ? const Color(0xFFF1F3F5) : const Color(0xFF111315),
       surfaceContainerLow: isLight ? Colors.white : const Color(0xFF191C1F),
-      surfaceContainerHighest: isLight ? const Color(0xFFEEF0F2) : const Color(0xFF262A2E),
-      outlineVariant: isLight ? const Color(0xFFE2E5E8) : const Color(0xFF30353A),
+      surfaceContainerHighest: isLight ? const Color(0xFFE5E9ED) : const Color(0xFF262A2E),
+      outlineVariant: isLight ? const Color(0xFFCED4DA) : const Color(0xFF30353A),
     );
 
     return ThemeData(
