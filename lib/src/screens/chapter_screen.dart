@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/study_summary.dart';
 import '../services/api_service.dart';
+import '../services/study_progress_service.dart';
 import '../theme/theme_controller.dart';
 import 'study_screen.dart';
 
@@ -16,20 +17,83 @@ class ChapterScreen extends StatefulWidget {
   State<ChapterScreen> createState() => _ChapterScreenState();
 }
 
+class _ChapterPageData {
+  const _ChapterPageData({
+    required this.chapters,
+    required this.rounds,
+    required this.finalRounds,
+  });
+
+  final List<ChapterSummary> chapters;
+  final Map<int, int> rounds;
+  final int finalRounds;
+}
+
 class _ChapterScreenState extends State<ChapterScreen> {
   final ApiService _api = ApiService();
-  late Future<List<ChapterSummary>> _chapters;
+  final StudyProgressService _progress = StudyProgressService.instance;
+  late Future<_ChapterPageData> _data;
 
   @override
   void initState() {
     super.initState();
-    _chapters = _api.fetchChapters(widget.level);
+    _data = _loadData();
+  }
+
+  Future<_ChapterPageData> _loadData() async {
+    final chapters = await _api.fetchChapters(widget.level);
+    final rounds = await _progress.chapterRounds(
+      widget.level,
+      chapters.map((item) => item.chapter),
+    );
+
+    // Migrate the old "all known = completed" state into the new round model.
+    // Once a chapter reaches 100%, its known flags are cleared and the first
+    // round is recorded immediately.
+    for (final chapter in chapters.where((item) => item.completed)) {
+      final words = await _api.fetchWords(
+        level: widget.level,
+        chapter: chapter.chapter,
+      );
+      if (words.isNotEmpty) {
+        await Future.wait(
+          words.map(
+            (word) => _api.queueWordState(word.id, known: false),
+          ),
+        );
+      }
+      if ((rounds[chapter.chapter] ?? 0) == 0) {
+        rounds[chapter.chapter] = await _progress.incrementRound(
+          widget.level,
+          chapter.chapter,
+        );
+      }
+    }
+
+    final finalRounds = await _progress.rounds(widget.level, 0);
+    return _ChapterPageData(
+      chapters: chapters,
+      rounds: rounds,
+      finalRounds: finalRounds,
+    );
   }
 
   Future<void> _refresh() async {
-    final future = _api.fetchChapters(widget.level);
-    setState(() => _chapters = future);
+    final future = _loadData();
+    setState(() => _data = future);
     await future;
+  }
+
+  Future<void> _openStudy(int chapter) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => StudyScreen(
+          level: widget.level,
+          chapter: chapter,
+        ),
+      ),
+    );
+    if (mounted) await _refresh();
   }
 
   @override
@@ -48,8 +112,8 @@ class _ChapterScreenState extends State<ChapterScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: FutureBuilder<List<ChapterSummary>>(
-          future: _chapters,
+        child: FutureBuilder<_ChapterPageData>(
+          future: _data,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return ListView(
@@ -63,11 +127,12 @@ class _ChapterScreenState extends State<ChapterScreen> {
             if (snapshot.hasError) {
               return _ChapterError(
                 message: snapshot.error.toString(),
-                onRetry: () => setState(() => _chapters = _api.fetchChapters(widget.level)),
+                onRetry: () => setState(() => _data = _loadData()),
               );
             }
 
-            final chapters = snapshot.data ?? const <ChapterSummary>[];
+            final data = snapshot.data;
+            final chapters = data?.chapters ?? const <ChapterSummary>[];
             if (chapters.isEmpty) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -78,45 +143,50 @@ class _ChapterScreenState extends State<ChapterScreen> {
               );
             }
 
-            final completed = chapters.where((item) => item.completed).length;
             final groups = <List<ChapterSummary>>[];
             for (var index = 0; index < chapters.length; index += 6) {
               groups.add(chapters.sublist(index, math.min(index + 6, chapters.length)));
             }
+            final totalWords = groups.fold<int>(
+              0,
+              (sum, group) => sum + group.last.total,
+            );
 
             return ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.fromLTRB(20, 8, 20, bottomPadding),
-              itemCount: groups.length + 1,
+              itemCount: groups.length + 2,
               itemBuilder: (context, index) {
                 if (index == 0) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 18),
                     child: _ChapterHeader(
                       level: widget.level,
-                      completed: completed,
                       total: chapters.length,
+                    ),
+                  );
+                }
+
+                if (index == groups.length + 1) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: _FinalSetCard(
+                      level: widget.level,
+                      totalWords: totalWords,
+                      rounds: data?.finalRounds ?? 0,
+                      onTap: () => _openStudy(0),
                     ),
                   );
                 }
 
                 final group = groups[index - 1];
                 return Padding(
-                  padding: EdgeInsets.only(bottom: index == groups.length ? 0 : 16),
+                  padding: const EdgeInsets.only(bottom: 16),
                   child: _ChapterGroup(
                     groupIndex: index,
                     chapters: group,
-                    onTap: (chapter) async {
-                      await Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => StudyScreen(
-                            level: widget.level,
-                            chapter: chapter.chapter,
-                          ),
-                        ),
-                      );
-                      if (mounted) await _refresh();
-                    },
+                    rounds: data?.rounds ?? const <int, int>{},
+                    onTap: (chapter) => _openStudy(chapter.chapter),
                   ),
                 );
               },
@@ -131,18 +201,15 @@ class _ChapterScreenState extends State<ChapterScreen> {
 class _ChapterHeader extends StatelessWidget {
   const _ChapterHeader({
     required this.level,
-    required this.completed,
     required this.total,
   });
 
   final String level;
-  final int completed;
   final int total;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final progress = total == 0 ? 0.0 : completed / total;
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 4),
       child: Row(
@@ -156,26 +223,14 @@ class _ChapterHeader extends StatelessWidget {
                 ),
           ),
           const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$completed / $total 챕터 완료',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                    minHeight: 6,
-                    value: progress,
-                    backgroundColor: scheme.surfaceContainerHighest,
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              '$total개 챕터 · 완료할 때마다 회독 +1',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
                   ),
-                ),
-              ],
             ),
           ),
         ],
@@ -188,11 +243,13 @@ class _ChapterGroup extends StatelessWidget {
   const _ChapterGroup({
     required this.groupIndex,
     required this.chapters,
+    required this.rounds,
     required this.onTap,
   });
 
   final int groupIndex;
   final List<ChapterSummary> chapters;
+  final Map<int, int> rounds;
   final ValueChanged<ChapterSummary> onTap;
 
   @override
@@ -264,6 +321,7 @@ class _ChapterGroup extends StatelessWidget {
               padding: EdgeInsets.only(bottom: itemIndex == chapters.length - 1 ? 0 : 8),
               child: _ChapterRow(
                 summary: chapter,
+                rounds: rounds[chapter.chapter] ?? 0,
                 onTap: () => onTap(chapter),
               ),
             );
@@ -275,15 +333,20 @@ class _ChapterGroup extends StatelessWidget {
 }
 
 class _ChapterRow extends StatelessWidget {
-  const _ChapterRow({required this.summary, required this.onTap});
+  const _ChapterRow({
+    required this.summary,
+    required this.rounds,
+    required this.onTap,
+  });
 
   final ChapterSummary summary;
+  final int rounds;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final complete = summary.completed;
+    final completedBefore = rounds > 0;
 
     return Material(
       color: Colors.transparent,
@@ -305,13 +368,13 @@ class _ChapterRow extends StatelessWidget {
                   height: 46,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: complete
+                    color: completedBefore
                         ? scheme.primary.withValues(alpha: 0.14)
                         : scheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: complete
-                      ? Icon(Icons.check_rounded, color: scheme.primary)
+                  child: completedBefore
+                      ? Icon(Icons.done_all_rounded, color: scheme.primary)
                       : Text(
                           summary.chapter.toString().padLeft(2, '0'),
                           style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -321,45 +384,118 @@ class _ChapterRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Chapter ${summary.chapter}',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(99),
-                              child: LinearProgressIndicator(
-                                minHeight: 5,
-                                value: summary.progress,
-                                backgroundColor: scheme.surfaceContainerHighest,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            '${summary.known}/${summary.total}',
-                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ],
+                  child: Text(
+                    'Chapter ${summary.chapter}',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Icon(Icons.arrow_forward_ios_rounded, size: 16, color: scheme.onSurfaceVariant),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: completedBefore
+                        ? scheme.primary.withValues(alpha: 0.11)
+                        : scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$rounds회독',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: completedBefore ? scheme.primary : scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: scheme.onSurfaceVariant,
+                ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FinalSetCard extends StatelessWidget {
+  const _FinalSetCard({
+    required this.level,
+    required this.totalWords,
+    required this.rounds,
+    required this.onTap,
+  });
+
+  final String level;
+  final int totalWords;
+  final int rounds;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(18, 17, 16, 17),
+          decoration: BoxDecoration(
+            color: scheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: scheme.primary.withValues(alpha: 0.28),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'SET Final',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$level 전체 단어',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$totalWords단어 · 전체 복습 · $rounds회독',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 17,
+                color: scheme.onSurfaceVariant,
+              ),
+            ],
           ),
         ),
       ),

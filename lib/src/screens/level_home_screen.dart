@@ -51,9 +51,6 @@ class _LevelHomeScreenState extends State<LevelHomeScreen> {
           }
 
           final levels = snapshot.data ?? const <LevelSummary>[];
-          final totalChapters = levels.fold<int>(0, (sum, item) => sum + item.chapters);
-          final completedChapters =
-              levels.fold<int>(0, (sum, item) => sum + item.completedChapters);
 
           return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -62,10 +59,7 @@ class _LevelHomeScreenState extends State<LevelHomeScreen> {
             separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 22 : 12),
             itemBuilder: (context, index) {
               if (index == 0) {
-                return _LevelHeader(
-                  completedChapters: completedChapters,
-                  totalChapters: totalChapters,
-                );
+                return const _LevelHeader();
               }
 
               final item = levels[index - 1];
@@ -89,13 +83,7 @@ class _LevelHomeScreenState extends State<LevelHomeScreen> {
 }
 
 class _LevelHeader extends StatelessWidget {
-  const _LevelHeader({
-    required this.completedChapters,
-    required this.totalChapters,
-  });
-
-  final int completedChapters;
-  final int totalChapters;
+  const _LevelHeader();
 
   @override
   Widget build(BuildContext context) {
@@ -112,47 +100,11 @@ class _LevelHeader extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          '6챕터 단위로 누적 복습하고, 다음 묶음에서 다시 50단어부터 시작해요.',
+          '6챕터 단위로 누적 복습하고, 완료할 때마다 회독 수를 쌓아요.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
                 height: 1.45,
               ),
-        ),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.55)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: scheme.primary,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 9),
-              Text(
-                '전체 진행',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const Spacer(),
-              Text(
-                '$completedChapters / $totalChapters 챕터',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-            ],
-          ),
         ),
       ],
     );
@@ -168,7 +120,6 @@ class _LevelCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final percent = (summary.progress * 100).round();
     final levelNumber = int.tryParse(summary.level.replaceFirst('N', '')) ?? 5;
     final accentAlpha = 0.56 + ((6 - levelNumber) * 0.07);
 
@@ -184,12 +135,12 @@ class _LevelCard extends StatelessWidget {
             border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 16, 18),
+            padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
             child: Row(
               children: [
                 Container(
                   width: 5,
-                  height: 76,
+                  height: 72,
                   decoration: BoxDecoration(
                     color: scheme.primary.withValues(alpha: accentAlpha.clamp(0.0, 1.0)),
                     borderRadius: BorderRadius.circular(99),
@@ -216,46 +167,21 @@ class _LevelCard extends StatelessWidget {
                               fontWeight: FontWeight.w800,
                             ),
                       ),
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 8),
                       Text(
-                        '${summary.completedChapters}/${summary.chapters} 챕터 완료  ·  즐겨찾기 ${summary.favorites}',
+                        '즐겨찾기 ${summary.favorites} · 챕터를 골라 반복 학습',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: scheme.onSurfaceVariant,
                             ),
                       ),
-                      const SizedBox(height: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(99),
-                        child: LinearProgressIndicator(
-                          minHeight: 5,
-                          value: summary.progress,
-                          backgroundColor: scheme.surfaceContainerHighest,
-                        ),
-                      ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 14),
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        value: summary.progress,
-                        strokeWidth: 4,
-                        backgroundColor: scheme.surfaceContainerHighest,
-                        strokeCap: StrokeCap.round,
-                      ),
-                      Text(
-                        '$percent%',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                    ],
-                  ),
+                const SizedBox(width: 10),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 17,
+                  color: scheme.onSurfaceVariant,
                 ),
               ],
             ),

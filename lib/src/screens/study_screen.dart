@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/word.dart';
 import '../services/api_service.dart';
+import '../services/study_progress_service.dart';
 import '../services/tts_service.dart';
 import '../theme/theme_controller.dart';
 
@@ -13,7 +14,11 @@ class StudyScreen extends StatefulWidget {
   });
 
   final String level;
+
+  /// 1+ = regular cumulative chapter, 0 = SET Final for the whole level.
   final int chapter;
+
+  bool get isFinal => chapter == 0;
 
   @override
   State<StudyScreen> createState() => _StudyScreenState();
@@ -22,14 +27,18 @@ class StudyScreen extends StatefulWidget {
 class _StudyScreenState extends State<StudyScreen> {
   final ApiService _api = ApiService();
   final TtsService _tts = TtsService.instance;
+  final StudyProgressService _progress = StudyProgressService.instance;
+
   List<Word> _words = const [];
   List<String> _queue = const [];
+  Set<String> _finalKnownIds = <String>{};
+
   bool _loading = true;
   bool _showReading = false;
   bool _showMeaning = false;
   bool _savingFavorite = false;
-  bool _reviewMode = false;
-  int _reviewIndex = 0;
+  bool _completingRound = false;
+  bool _completionInFlight = false;
   String? _error;
 
   @override
@@ -47,9 +56,6 @@ class _StudyScreenState extends State<StudyScreen> {
   int get _knownCount => _words.where((word) => word.known).length;
 
   Word get _current {
-    if (_reviewMode) {
-      return _words[_reviewIndex % _words.length];
-    }
     final currentId = _queue.first;
     return _words.firstWhere((word) => word.id == currentId);
   }
@@ -75,23 +81,45 @@ class _StudyScreenState extends State<StudyScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _completingRound = false;
     });
+
     try {
-      final words = await _api.fetchWords(level: widget.level, chapter: widget.chapter);
+      List<Word> words;
+      if (widget.isFinal) {
+        final fetched = await _api.fetchWords(level: widget.level);
+        final knownIds = await _progress.finalKnown(widget.level);
+        _finalKnownIds = knownIds;
+        words = fetched
+            .map((word) => word.copyWith(known: knownIds.contains(word.id)))
+            .toList();
+      } else {
+        words = await _api.fetchWords(
+          level: widget.level,
+          chapter: widget.chapter,
+        );
+      }
+
+      final queue = words.where((word) => !word.known).map((word) => word.id).toList();
+
       if (!mounted) return;
       setState(() {
         _words = words;
-        _queue = words.where((word) => !word.known).map((word) => word.id).toList();
+        _queue = queue;
         _loading = false;
         _showReading = false;
         _showMeaning = false;
-        _reviewMode = false;
-        _reviewIndex = 0;
+        _completingRound = words.isNotEmpty && queue.isEmpty;
       });
+
+      if (words.isNotEmpty && queue.isEmpty) {
+        await _completeRound();
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _loading = false;
+        _completingRound = false;
         _error = error.toString();
       });
     }
@@ -111,7 +139,7 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   Future<void> _toggleFavorite() async {
-    if (_savingFavorite || _words.isEmpty) return;
+    if (_savingFavorite || _words.isEmpty || _queue.isEmpty) return;
     final current = _current;
     final next = !current.favorite;
     setState(() {
@@ -123,7 +151,7 @@ class _StudyScreenState extends State<StudyScreen> {
       final updated = await _api.updateWord(current.id, favorite: next);
       if (!mounted) return;
       setState(() {
-        _replaceWord(updated);
+        _replaceWord(updated.copyWith(known: current.known));
         _savingFavorite = false;
       });
     } catch (error) {
@@ -139,7 +167,7 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   void _studyAgain() {
-    if (_queue.isEmpty) return;
+    if (_queue.isEmpty || _completingRound) return;
     _tts.stop();
     setState(() {
       if (_queue.length > 1) {
@@ -151,70 +179,159 @@ class _StudyScreenState extends State<StudyScreen> {
     });
   }
 
+  Future<void> _persistKnown(Word word, bool known) async {
+    if (widget.isFinal) {
+      if (known) {
+        _finalKnownIds.add(word.id);
+      } else {
+        _finalKnownIds.remove(word.id);
+      }
+      await _progress.setFinalKnown(widget.level, _finalKnownIds);
+      return;
+    }
+
+    await _api.queueWordState(word.id, known: known);
+  }
+
   Future<void> _markKnown() async {
-    if (_queue.isEmpty) return;
+    if (_queue.isEmpty || _completingRound) return;
     final current = _current;
     _tts.stop();
 
+    final nextQueue = _queue.skip(1).toList();
+    final finished = nextQueue.isEmpty;
+
     setState(() {
       _replaceWord(current.copyWith(known: true));
-      _queue = _queue.skip(1).toList();
+      _queue = nextQueue;
       _showReading = false;
       _showMeaning = false;
+      if (finished) _completingRound = true;
     });
 
-    if (current.known) return;
+    if (current.known) {
+      if (finished) await _completeRound();
+      return;
+    }
+
     try {
-      await _api.queueWordState(current.id, known: true);
+      await _persistKnown(current, true);
     } catch (error) {
       if (!mounted) return;
+      if (widget.isFinal) {
+        _finalKnownIds.remove(current.id);
+      }
       setState(() {
         _replaceWord(current);
         if (!_queue.contains(current.id)) {
           _queue = [..._queue, current.id];
         }
+        _completingRound = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('학습 상태 저장 실패: $error')),
       );
+      return;
+    }
+
+    if (finished) {
+      await _completeRound();
     }
   }
 
-  void _startReview() {
-    _tts.stop();
-    setState(() {
-      _reviewMode = true;
-      _reviewIndex = 0;
-      _showReading = false;
-      _showMeaning = false;
-    });
-  }
+  Future<void> _completeRound() async {
+    if (_completionInFlight || _words.isEmpty) return;
+    _completionInFlight = true;
 
-  void _nextReviewWord() {
-    if (_words.isEmpty) return;
-    _tts.stop();
-    setState(() {
-      _reviewIndex = (_reviewIndex + 1) % _words.length;
-      _showReading = false;
-      _showMeaning = false;
-    });
-  }
-
-  Future<void> _toggleKnownInReview() async {
-    if (_words.isEmpty) return;
-    final current = _current;
-    final next = !current.known;
-    setState(() => _replaceWord(current.copyWith(known: next)));
+    if (mounted && !_completingRound) {
+      setState(() => _completingRound = true);
+    }
 
     try {
-      await _api.queueWordState(current.id, known: next);
+      if (widget.isFinal) {
+        await _progress.clearFinalKnown(widget.level);
+        _finalKnownIds = <String>{};
+      } else {
+        await Future.wait(
+          _words.map(
+            (word) => _api.queueWordState(word.id, known: false),
+          ),
+        );
+      }
+
+      final rounds = await _progress.incrementRound(
+        widget.level,
+        widget.chapter,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _words = _words.map((word) => word.copyWith(known: false)).toList();
+        _queue = _words.map((word) => word.id).toList();
+        _showReading = false;
+        _showMeaning = false;
+        _completingRound = false;
+      });
+
+      final leave = await _showCompletionDialog(rounds);
+      if (leave && mounted) {
+        Navigator.of(context).pop();
+      }
     } catch (error) {
       if (!mounted) return;
-      setState(() => _replaceWord(current));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('학습 상태 저장 실패: $error')),
-      );
+      setState(() {
+        _completingRound = false;
+        _error = '회독 완료 처리에 실패했습니다.\n$error';
+      });
+    } finally {
+      _completionInFlight = false;
     }
+  }
+
+  Future<bool> _showCompletionDialog(int rounds) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final scheme = Theme.of(dialogContext).colorScheme;
+        final title = widget.isFinal
+            ? '${widget.level} 전체 단어 회독 완료!'
+            : '챕터를 완료했어요!';
+        final description = widget.isFinal
+            ? '${_words.length}개 단어의 알고 있음 상태를 초기화하고 $rounds회독으로 기록했어요.'
+            : '${_words.length}개 단어의 알고 있음 상태를 모두 해제하고 $rounds회독으로 기록했어요.';
+
+        return AlertDialog(
+          icon: Icon(
+            Icons.done_all_rounded,
+            color: scheme.primary,
+            size: 36,
+          ),
+          title: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          content: Text(
+            description,
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            TextButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('챕터 목록으로'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              icon: const Icon(Icons.replay_rounded),
+              label: const Text('한 번 더 학습'),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
   }
 
   @override
@@ -223,7 +340,9 @@ class _StudyScreenState extends State<StudyScreen> {
       appBar: AppBar(
         centerTitle: true,
         title: Text(
-          '${widget.level}  ·  ${widget.chapter.toString().padLeft(2, '0')}',
+          widget.isFinal
+              ? '${widget.level}  ·  FINAL'
+              : '${widget.level}  ·  ${widget.chapter.toString().padLeft(2, '0')}',
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: const [
@@ -261,14 +380,14 @@ class _StudyScreenState extends State<StudyScreen> {
       );
     }
     if (_words.isEmpty) {
-      return const Center(child: Text('이 챕터에는 단어가 없습니다.'));
-    }
-    if (!_reviewMode && _queue.isEmpty) {
-      return _AlreadyComplete(
-        total: _words.length,
-        onBack: () => Navigator.of(context).pop(),
-        onReview: _startReview,
+      return Center(
+        child: Text(
+          widget.isFinal ? '이 등급에는 단어가 없습니다.' : '이 챕터에는 단어가 없습니다.',
+        ),
       );
+    }
+    if (_completingRound || _queue.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
     }
 
     final current = _current;
@@ -282,16 +401,13 @@ class _StudyScreenState extends State<StudyScreen> {
         padding: const EdgeInsets.fromLTRB(18, 6, 18, 16),
         child: Column(
           children: [
-            if (!_reviewMode) ...[
-              _ProgressHeader(
-                known: known,
-                total: total,
-                remaining: _queue.length,
-                progress: progress,
-              ),
-              const SizedBox(height: 16),
-            ] else
-              const SizedBox(height: 4),
+            _ProgressHeader(
+              known: known,
+              total: total,
+              remaining: _queue.length,
+              progress: progress,
+            ),
+            const SizedBox(height: 16),
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -314,9 +430,7 @@ class _StudyScreenState extends State<StudyScreen> {
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
-                              _reviewMode
-                                  ? '다시보기 ${_reviewIndex + 1}/$total'
-                                  : '${_queue.length}개 남음',
+                              '${_queue.length}개 남음',
                               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                                     color: scheme.primary,
                                     fontWeight: FontWeight.w900,
@@ -480,75 +594,37 @@ class _StudyScreenState extends State<StudyScreen> {
               ),
             ),
             const SizedBox(height: 14),
-            if (_reviewMode)
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 60,
-                      child: OutlinedButton.icon(
-                        onPressed: _nextReviewWord,
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 20),
-                        label: const Text(
-                          '다음 단어',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-                        ),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 60,
+                    child: OutlinedButton.icon(
+                      onPressed: _completingRound ? null : _studyAgain,
+                      icon: const Icon(Icons.replay_rounded, size: 20),
+                      label: const Text(
+                        '다시 학습',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: SizedBox(
-                      height: 60,
-                      child: FilledButton.icon(
-                        onPressed: _toggleKnownInReview,
-                        icon: Icon(
-                          current.known
-                              ? Icons.remove_circle_outline_rounded
-                              : Icons.check_rounded,
-                          size: 20,
-                        ),
-                        label: Text(
-                          current.known ? '알고 있음 해제' : '알고 있음',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                        ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 60,
+                    child: FilledButton.icon(
+                      onPressed: _completingRound ? null : _markKnown,
+                      icon: const Icon(Icons.check_rounded, size: 20),
+                      label: const Text(
+                        '알고 있음',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
                       ),
                     ),
                   ),
-                ],
-              )
-            else
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 60,
-                      child: OutlinedButton.icon(
-                        onPressed: _studyAgain,
-                        icon: const Icon(Icons.replay_rounded, size: 20),
-                        label: const Text(
-                          '다시 학습',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: SizedBox(
-                      height: 60,
-                      child: FilledButton.icon(
-                        onPressed: _markKnown,
-                        icon: const Icon(Icons.check_rounded, size: 20),
-                        label: const Text(
-                          '알고 있음',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -704,75 +780,6 @@ class _RevealChoice extends StatelessWidget {
                         color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
                         fontWeight: FontWeight.w800,
                       ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AlreadyComplete extends StatelessWidget {
-  const _AlreadyComplete({
-    required this.total,
-    required this.onBack,
-    required this.onReview,
-  });
-
-  final int total;
-  final VoidCallback onBack;
-  final VoidCallback onReview;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return SafeArea(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: scheme.primary.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.done_all_rounded, color: scheme.primary, size: 34),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                '이 챕터는 완료했어요',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '$total개 단어가 모두 알고 있음 상태입니다.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: scheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: 240,
-                child: FilledButton.icon(
-                  onPressed: onBack,
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  label: const Text('챕터 목록으로'),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: 240,
-                child: OutlinedButton.icon(
-                  onPressed: onReview,
-                  icon: const Icon(Icons.visibility_rounded),
-                  label: const Text('챕터 단어 다시보기'),
                 ),
               ),
             ],
