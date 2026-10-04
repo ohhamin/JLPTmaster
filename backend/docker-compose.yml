@@ -11,6 +11,10 @@ services:
       USERS_JSON_PATH: /app/data/users.json
       SESSIONS_JSON_PATH: /app/data/sessions.json
       USER_DATA_ROOT: /app/data/user_data
+      LEVEL_XP_REQUIRED: ${LEVEL_XP_REQUIRED:-30}
+      DAILY_ATTENDANCE_XP: ${DAILY_ATTENDANCE_XP:-5}
+      ROUND_COMPLETION_XP: ${ROUND_COMPLETION_XP:-30}
+      APP_TIMEZONE_OFFSET_HOURS: ${APP_TIMEZONE_OFFSET_HOURS:-9}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
     volumes:
