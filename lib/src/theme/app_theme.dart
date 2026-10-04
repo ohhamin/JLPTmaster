@@ -41,14 +41,15 @@ class AppTheme {
       brightness: brightness,
       colorScheme: scheme,
       fontFamily: AppTypography.uiFontFamily,
-      scaffoldBackgroundColor: scheme.surface,
+      scaffoldBackgroundColor: Colors.transparent,
       splashColor: scheme.primary.withValues(alpha: 0.08),
       highlightColor: scheme.primary.withValues(alpha: 0.05),
       dividerColor: scheme.outlineVariant,
       appBarTheme: AppBarTheme(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: scheme.surface,
+        backgroundColor: scheme.surface.withValues(alpha: isLight ? 0.86 : 0.90),
+        surfaceTintColor: Colors.transparent,
         foregroundColor: scheme.onSurface,
         centerTitle: false,
         titleTextStyle: TextStyle(
