@@ -64,21 +64,21 @@ jobs:
           PY
           grep -n 'android:label\|android.permission.INTERNET\|android.intent.action.TTS_SERVICE' android/app/src/main/AndroidManifest.xml
 
-      - name: Apply high-resolution raster launcher icon
+      - name: Apply transparent launcher icon
         run: |
           cat \
             assets/branding/app_icon.part-00 \
             assets/branding/app_icon.part-01 \
             assets/branding/app_icon.part-02 \
-            | base64 --decode > /tmp/jlptmaster_app_icon.jpg
+            | base64 --decode > /tmp/jlptmaster_app_icon.webp
           python -m pip install --quiet pillow
           python - <<'PY'
           from pathlib import Path
           from PIL import Image
 
-          source = Path('/tmp/jlptmaster_app_icon.jpg')
-          image = Image.open(source).convert('RGB')
-          print(f'launcher source: {image.width}x{image.height}')
+          source = Path('/tmp/jlptmaster_app_icon.webp')
+          image = Image.open(source).convert('RGBA')
+          print(f'launcher source: {image.width}x{image.height}, mode={image.mode}')
 
           sizes = {
               'mipmap-mdpi': 48,
