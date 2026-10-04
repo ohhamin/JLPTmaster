@@ -189,40 +189,15 @@ class TtsService {
     });
   }
 
+  /// Local prototype TTS values were only test data. The server is now the
+  /// single source of truth, so legacy values are deleted instead of uploaded.
   Future<void> migrateLegacyLocalSettings() async {
     final userId = SessionStore.userId;
     if (userId == null || userId.isEmpty) return;
+
     final prefs = await SharedPreferences.getInstance();
     final marker = '$_migrationPrefix:$userId';
     if (prefs.getBool(marker) == true) return;
-
-    final hasLegacy = prefs.containsKey(_legacyRateKey) ||
-        prefs.containsKey(_legacyPitchKey) ||
-        prefs.containsKey(_legacyVolumeKey) ||
-        prefs.containsKey(_legacyVoiceNameKey) ||
-        prefs.containsKey(_legacyVoiceLocaleKey);
-
-    if (hasLegacy) {
-      final server = await _api.fetchSettings();
-      final serverTts = Map<String, dynamic>.from(server['tts'] as Map? ?? const {});
-      if (serverTts.isEmpty) {
-        final patch = <String, dynamic>{
-          if (prefs.getDouble(_legacyRateKey) != null)
-            'speech_rate': prefs.getDouble(_legacyRateKey),
-          if (prefs.getDouble(_legacyPitchKey) != null)
-            'pitch': prefs.getDouble(_legacyPitchKey),
-          if (prefs.getDouble(_legacyVolumeKey) != null)
-            'volume': prefs.getDouble(_legacyVolumeKey),
-          if (prefs.getString(_legacyVoiceNameKey) != null)
-            'voice_name': prefs.getString(_legacyVoiceNameKey),
-          if (prefs.getString(_legacyVoiceLocaleKey) != null)
-            'voice_locale': prefs.getString(_legacyVoiceLocaleKey),
-        };
-        if (patch.isNotEmpty) {
-          await _api.updateSettings({'tts': patch});
-        }
-      }
-    }
 
     for (final key in const [
       _legacyRateKey,
