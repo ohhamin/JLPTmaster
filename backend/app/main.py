@@ -121,6 +121,9 @@ def health() -> dict[str, str]:
 
 @app.get('/api/levels')
 def get_levels() -> list[dict]:
+    # Build summaries from one in-memory snapshot. Calling _study_words for every
+    # chapter rebuilt/enriched all ~8k words each time and made this endpoint
+    # slower than the mobile client's timeout.
     base_words = store.list_words()
     result: list[dict] = []
     for level in _LEVEL_ORDER:
@@ -128,8 +131,16 @@ def get_levels() -> list[dict]:
         chapters = sorted({int(word.get('chapter') or 1) for word in level_words})
         completed = 0
         for chapter in chapters:
-            study_words = _study_words(level, chapter)
-            if study_words and all(bool(word.get('known', False)) for word in study_words):
+            start = _block_start(chapter)
+            study_words = [
+                word
+                for word in level_words
+                if start <= int(word.get('chapter') or 1) <= chapter
+            ]
+            if study_words and all(
+                store.is_known(str(word.get('id', '')), chapter)
+                for word in study_words
+            ):
                 completed += 1
 
         favorite_surfaces = {
@@ -152,12 +163,22 @@ def get_levels() -> list[dict]:
 
 @app.get('/api/chapters')
 def get_chapters(level: JlptLevel) -> list[dict]:
+    # Reuse one snapshot and only look up the chapter-scoped known flag.
     base_words = [word for word in store.list_words() if word.get('level') == level]
     chapter_numbers = sorted({int(word.get('chapter') or 1) for word in base_words})
     result: list[dict] = []
     for chapter in chapter_numbers:
-        chapter_words = _study_words(level, chapter)
-        known = sum(1 for word in chapter_words if bool(word.get('known', False)))
+        start = _block_start(chapter)
+        chapter_words = [
+            word
+            for word in base_words
+            if start <= int(word.get('chapter') or 1) <= chapter
+        ]
+        known = sum(
+            1
+            for word in chapter_words
+            if store.is_known(str(word.get('id', '')), chapter)
+        )
         total = len(chapter_words)
         result.append(
             {
