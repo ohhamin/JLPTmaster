@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from .store import JsonWordStore
 
-app = FastAPI(title='JLPTmaster API', version='0.3.0')
+app = FastAPI(title='JLPTmaster API', version='0.4.0')
 store = JsonWordStore()
 
 app.add_middleware(
@@ -26,6 +26,21 @@ app.add_middleware(
 JlptLevel = Literal['N5', 'N4', 'N3', 'N2', 'N1']
 _LEVEL_ORDER: tuple[JlptLevel, ...] = ('N5', 'N4', 'N3', 'N2', 'N1')
 _STATE_UPDATE_FIELDS = {'favorite', 'known', 'correct_count', 'wrong_count'}
+
+
+def _block_start(chapter: int) -> int:
+    """Every six chapters starts a fresh cumulative study block."""
+    return ((chapter - 1) // 6) * 6 + 1
+
+
+def _study_words(level: str, chapter: int) -> list[dict]:
+    start = _block_start(chapter)
+    return [
+        word
+        for word in store.list_words(known_chapter=chapter)
+        if word.get('level') == level
+        and start <= int(word.get('chapter') or 1) <= chapter
+    ]
 
 
 class ExampleWord(BaseModel):
@@ -74,6 +89,7 @@ class WordUpdate(BaseModel):
 
 class WordStateUpdate(BaseModel):
     word_id: str = Field(min_length=1, max_length=120)
+    chapter: int | None = Field(default=None, ge=1)
     favorite: bool | None = None
     known: bool | None = None
     correct_count: int | None = Field(default=None, ge=0)
@@ -81,7 +97,7 @@ class WordStateUpdate(BaseModel):
 
 
 class BatchStateUpdate(BaseModel):
-    updates: list[WordStateUpdate] = Field(min_length=1, max_length=250)
+    updates: list[WordStateUpdate] = Field(min_length=1, max_length=500)
 
 
 @app.get('/health')
@@ -91,18 +107,30 @@ def health() -> dict[str, str]:
 
 @app.get('/api/levels')
 def get_levels() -> list[dict]:
-    words = store.list_words()
+    base_words = store.list_words()
     result: list[dict] = []
     for level in _LEVEL_ORDER:
-        level_words = [word for word in words if word.get('level') == level]
-        chapters = {int(word.get('chapter') or 1) for word in level_words}
+        level_words = [word for word in base_words if word.get('level') == level]
+        chapters = sorted({int(word.get('chapter') or 1) for word in level_words})
+        completed = 0
+        for chapter in chapters:
+            study_words = _study_words(level, chapter)
+            if study_words and all(bool(word.get('known', False)) for word in study_words):
+                completed += 1
+
+        favorite_surfaces = {
+            str(word.get('word', ''))
+            for word in level_words
+            if bool(word.get('favorite', False))
+        }
         result.append(
             {
                 'level': level,
                 'total': len(level_words),
                 'known': sum(1 for word in level_words if bool(word.get('known', False))),
-                'favorites': sum(1 for word in level_words if bool(word.get('favorite', False))),
+                'favorites': len(favorite_surfaces),
                 'chapters': len(chapters),
+                'completed_chapters': completed,
             }
         )
     return result
@@ -110,21 +138,24 @@ def get_levels() -> list[dict]:
 
 @app.get('/api/chapters')
 def get_chapters(level: JlptLevel) -> list[dict]:
-    words = [word for word in store.list_words() if word.get('level') == level]
-    grouped: dict[int, list[dict]] = {}
-    for word in words:
-        chapter = int(word.get('chapter') or 1)
-        grouped.setdefault(chapter, []).append(word)
-
-    return [
-        {
-            'level': level,
-            'chapter': chapter,
-            'total': len(chapter_words),
-            'known': sum(1 for word in chapter_words if bool(word.get('known', False))),
-        }
-        for chapter, chapter_words in sorted(grouped.items())
-    ]
+    base_words = [word for word in store.list_words() if word.get('level') == level]
+    chapter_numbers = sorted({int(word.get('chapter') or 1) for word in base_words})
+    result: list[dict] = []
+    for chapter in chapter_numbers:
+        chapter_words = _study_words(level, chapter)
+        known = sum(1 for word in chapter_words if bool(word.get('known', False)))
+        total = len(chapter_words)
+        result.append(
+            {
+                'level': level,
+                'chapter': chapter,
+                'total': total,
+                'known': known,
+                'completed': total > 0 and known == total,
+                'block_start': _block_start(chapter),
+            }
+        )
+    return result
 
 
 @app.get('/api/words')
@@ -134,11 +165,16 @@ def get_words(
     favorite: bool | None = None,
     q: str | None = Query(default=None, max_length=100),
 ) -> list[dict]:
-    words = store.list_words()
+    words = store.list_words(known_chapter=chapter) if chapter is not None else store.list_words()
     if level:
         words = [word for word in words if word.get('level') == level]
     if chapter is not None:
-        words = [word for word in words if int(word.get('chapter') or 1) == chapter]
+        start = _block_start(chapter)
+        words = [
+            word
+            for word in words
+            if start <= int(word.get('chapter') or 1) <= chapter
+        ]
     if favorite is not None:
         words = [word for word in words if bool(word.get('favorite', False)) is favorite]
     if q:
@@ -154,8 +190,11 @@ def get_words(
 
 
 @app.get('/api/words/{word_id}')
-def get_word(word_id: str) -> dict:
-    word = store.get_word(word_id)
+def get_word(
+    word_id: str,
+    chapter: int | None = Query(default=None, ge=1),
+) -> dict:
+    word = store.get_word(word_id, known_chapter=chapter)
     if word is None:
         raise HTTPException(status_code=404, detail='word not found')
     return word
@@ -173,12 +212,16 @@ def create_word(payload: WordCreate) -> dict:
         'updated_at': now,
     }
     store.create_word(word)
-    return word
+    return store.get_word(word['id']) or word
 
 
 @app.put('/api/words/{word_id}')
-def update_word(word_id: str, payload: WordUpdate) -> dict:
-    current = store.get_word(word_id)
+def update_word(
+    word_id: str,
+    payload: WordUpdate,
+    study_chapter: int | None = Query(default=None, ge=1),
+) -> dict:
+    current = store.get_word(word_id, known_chapter=study_chapter)
     if current is None:
         raise HTTPException(status_code=404, detail='word not found')
 
@@ -186,6 +229,8 @@ def update_word(word_id: str, payload: WordUpdate) -> dict:
     now = datetime.now(timezone.utc).isoformat()
     if set(changes).issubset(_STATE_UPDATE_FIELDS):
         state_update = {'word_id': word_id, **changes, 'updated_at': now}
+        if study_chapter is not None:
+            state_update['chapter'] = study_chapter
         try:
             return store.update_states([state_update])[0]
         except KeyError as exc:
@@ -193,8 +238,10 @@ def update_word(word_id: str, payload: WordUpdate) -> dict:
 
     changes['updated_at'] = now
     updated = {**current, **changes}
+    if study_chapter is not None:
+        updated['study_chapter'] = study_chapter
     store.replace_word(word_id, updated)
-    return store.get_word(word_id) or updated
+    return store.get_word(word_id, known_chapter=study_chapter) or updated
 
 
 @app.post('/api/progress/batch')
