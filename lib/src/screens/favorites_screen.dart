@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/word.dart';
 import '../services/api_service.dart';
-import 'word_detail_screen.dart';
+import 'word_detail_screen_v2.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -132,7 +132,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         onTap: () async {
                           await Navigator.of(context).push(
                             MaterialPageRoute<void>(
-                              builder: (_) => WordDetailScreen(word: word),
+                              builder: (_) => WordDetailScreenV2(word: word),
                             ),
                           );
                           if (mounted) _reload();
