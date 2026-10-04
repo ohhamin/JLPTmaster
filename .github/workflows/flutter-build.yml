@@ -63,8 +63,11 @@ jobs:
 
       - name: Apply high-resolution raster launcher icon
         run: |
-          test -f assets/branding/app_icon_1024.jpg
-          base64 --decode assets/branding/app_icon_1024.jpg > /tmp/jlptmaster_app_icon.jpg
+          cat \
+            assets/branding/app_icon.part-00 \
+            assets/branding/app_icon.part-01 \
+            assets/branding/app_icon.part-02 \
+            | base64 --decode > /tmp/jlptmaster_app_icon.jpg
           python -m pip install --quiet pillow
           python - <<'PY'
           from pathlib import Path
@@ -72,8 +75,7 @@ jobs:
 
           source = Path('/tmp/jlptmaster_app_icon.jpg')
           image = Image.open(source).convert('RGB')
-          if image.size != (1024, 1024):
-              image = image.resize((1024, 1024), Image.Resampling.LANCZOS)
+          print(f'launcher source: {image.width}x{image.height}')
 
           sizes = {
               'mipmap-mdpi': 48,
