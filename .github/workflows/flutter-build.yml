@@ -28,6 +28,9 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Download Pretendard fonts
+        run: bash tool/fetch_pretendard_fonts.sh
+
       - name: Generate Android project
         run: flutter create . --project-name jlptmaster --org com.jlptmaster --platforms=android
 
