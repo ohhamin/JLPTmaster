@@ -69,10 +69,11 @@ class ApiService {
     return decoded.map((e) => Word.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<Word> fetchWord(String wordId) async {
-    final response = await _client
-        .get(Uri.parse('$baseUrl/api/words/$wordId'))
-        .timeout(const Duration(seconds: 8));
+  Future<Word> fetchWord(String wordId, {int? chapter}) async {
+    final uri = Uri.parse('$baseUrl/api/words/$wordId').replace(
+      queryParameters: chapter == null ? null : {'chapter': chapter.toString()},
+    );
+    final response = await _client.get(uri).timeout(const Duration(seconds: 8));
     _ensureOk(response, '단어 정보를 불러오지 못했습니다.');
     return Word.fromJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
@@ -83,14 +84,18 @@ class ApiService {
     String wordId, {
     bool? favorite,
     bool? known,
+    int? chapter,
   }) async {
     final payload = <String, dynamic>{};
     if (favorite != null) payload['favorite'] = favorite;
     if (known != null) payload['known'] = known;
 
+    final uri = Uri.parse('$baseUrl/api/words/$wordId').replace(
+      queryParameters: chapter == null ? null : {'study_chapter': chapter.toString()},
+    );
     final response = await _client
         .put(
-          Uri.parse('$baseUrl/api/words/$wordId'),
+          uri,
           headers: const {'Content-Type': 'application/json; charset=utf-8'},
           body: jsonEncode(payload),
         )
@@ -105,13 +110,18 @@ class ApiService {
     String wordId, {
     bool? favorite,
     bool? known,
+    int? chapter,
   }) {
-    final payload = _pendingStates.putIfAbsent(wordId, () => <String, dynamic>{});
+    final key = '$wordId@${chapter ?? 0}';
+    final payload = _pendingStates.putIfAbsent(key, () => <String, dynamic>{
+          'word_id': wordId,
+          if (chapter != null) 'chapter': chapter,
+        });
     if (favorite != null) payload['favorite'] = favorite;
     if (known != null) payload['known'] = known;
 
     final completer = Completer<void>();
-    _pendingWaiters.putIfAbsent(wordId, () => <Completer<void>>[]).add(completer);
+    _pendingWaiters.putIfAbsent(key, () => <Completer<void>>[]).add(completer);
     _stateTimer?.cancel();
     _stateTimer = Timer(const Duration(milliseconds: 120), _flushStates);
     return completer.future;
@@ -127,12 +137,12 @@ class ApiService {
       ),
     );
     final waiters = <String, List<Completer<void>>>{
-      for (final id in states.keys)
-        id: List<Completer<void>>.from(_pendingWaiters[id] ?? const []),
+      for (final key in states.keys)
+        key: List<Completer<void>>.from(_pendingWaiters[key] ?? const []),
     };
-    for (final id in states.keys) {
-      _pendingStates.remove(id);
-      _pendingWaiters.remove(id);
+    for (final key in states.keys) {
+      _pendingStates.remove(key);
+      _pendingWaiters.remove(key);
     }
 
     try {
@@ -140,11 +150,7 @@ class ApiService {
           .post(
             Uri.parse('$baseUrl/api/progress/batch'),
             headers: const {'Content-Type': 'application/json; charset=utf-8'},
-            body: jsonEncode({
-              'updates': states.entries
-                  .map((entry) => {'word_id': entry.key, ...entry.value})
-                  .toList(),
-            }),
+            body: jsonEncode({'updates': states.values.toList()}),
           )
           .timeout(const Duration(seconds: 8));
       _ensureOk(response, '학습 상태를 저장하지 못했습니다.');
