@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/study_summary.dart';
@@ -77,35 +79,45 @@ class _ChapterScreenState extends State<ChapterScreen> {
             }
 
             final completed = chapters.where((item) => item.completed).length;
+            final groups = <List<ChapterSummary>>[];
+            for (var index = 0; index < chapters.length; index += 6) {
+              groups.add(chapters.sublist(index, math.min(index + 6, chapters.length)));
+            }
 
-            return ListView.separated(
+            return ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.fromLTRB(20, 8, 20, bottomPadding),
-              itemCount: chapters.length + 1,
-              separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 18 : 10),
+              itemCount: groups.length + 1,
               itemBuilder: (context, index) {
                 if (index == 0) {
-                  return _ChapterHeader(
-                    level: widget.level,
-                    completed: completed,
-                    total: chapters.length,
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 18),
+                    child: _ChapterHeader(
+                      level: widget.level,
+                      completed: completed,
+                      total: chapters.length,
+                    ),
                   );
                 }
 
-                final chapter = chapters[index - 1];
-                return _ChapterRow(
-                  summary: chapter,
-                  onTap: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => StudyScreen(
-                          level: widget.level,
-                          chapter: chapter.chapter,
+                final group = groups[index - 1];
+                return Padding(
+                  padding: EdgeInsets.only(bottom: index == groups.length ? 0 : 16),
+                  child: _ChapterGroup(
+                    groupIndex: index,
+                    chapters: group,
+                    onTap: (chapter) async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => StudyScreen(
+                            level: widget.level,
+                            chapter: chapter.chapter,
+                          ),
                         ),
-                      ),
-                    );
-                    if (mounted) await _refresh();
-                  },
+                      );
+                      if (mounted) await _refresh();
+                    },
+                  ),
                 );
               },
             );
@@ -166,6 +178,96 @@ class _ChapterHeader extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChapterGroup extends StatelessWidget {
+  const _ChapterGroup({
+    required this.groupIndex,
+    required this.chapters,
+    required this.onTap,
+  });
+
+  final int groupIndex;
+  final List<ChapterSummary> chapters;
+  final ValueChanged<ChapterSummary> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final first = chapters.first;
+    final last = chapters.last;
+    final rangeLabel = first.chapter == last.chapter
+        ? 'Chapter ${first.chapter}'
+        : 'Chapter ${first.chapter}–${last.chapter}';
+    final wordsLabel = first.total == last.total
+        ? '${first.total}단어'
+        : '${first.total} → ${last.total}단어';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: scheme.primary.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 0, 6, 10),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    'SET ${groupIndex.toString().padLeft(2, '0')}',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.7,
+                        ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    rangeLabel,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+                Text(
+                  '$wordsLabel 누적',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          ...chapters.indexed.map((entry) {
+            final itemIndex = entry.$1;
+            final chapter = entry.$2;
+            return Padding(
+              padding: EdgeInsets.only(bottom: itemIndex == chapters.length - 1 ? 0 : 8),
+              child: _ChapterRow(
+                summary: chapter,
+                onTap: () => onTap(chapter),
+              ),
+            );
+          }),
         ],
       ),
     );
