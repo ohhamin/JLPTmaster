@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/gamification_service.dart';
 import '../services/session_store.dart';
 import '../services/tts_service.dart';
 
@@ -25,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double _volume = 1.0;
   List<TtsVoiceOption> _voices = const [];
   TtsVoiceOption? _selectedVoice;
+  LevelingStatus? _leveling;
 
   @override
   void initState() {
@@ -42,6 +44,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final settings = await _tts.settings();
       final voices = await _tts.japaneseVoices();
+      LevelingStatus? leveling;
+      try {
+        leveling = await GamificationService.instance.fetchStatus();
+      } catch (_) {}
       TtsVoiceOption? selected;
       for (final voice in voices) {
         if (voice.name == settings.voiceName && voice.locale == settings.voiceLocale) {
@@ -56,6 +62,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _volume = settings.volume;
         _voices = voices;
         _selectedVoice = selected;
+        _leveling = leveling;
         _loading = false;
         _error = null;
       });
@@ -151,6 +158,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
+        if (_leveling != null) ...[
+          const SizedBox(height: 14),
+          _LevelingSummaryCard(status: _leveling!),
+        ],
         const SizedBox(height: 22),
         Text(
           'TTS 설정',
@@ -285,6 +296,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LevelingSummaryCard extends StatelessWidget {
+  const _LevelingSummaryCard({required this.status});
+
+  final LevelingStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return _SettingsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Lv.${status.level}',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w900,
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                '${status.experience} / ${status.xpRequired} XP',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              minHeight: 8,
+              value: status.progress.clamp(0.0, 1.0),
+              backgroundColor: scheme.surfaceContainerHighest,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '하루 첫 출석 +${status.dailyAttendanceXp} XP  ·  1회독 +${status.roundCompletionXp} XP',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+      ),
     );
   }
 }

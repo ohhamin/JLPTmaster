@@ -1,7 +1,15 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_service.dart';
+import 'gamification_service.dart';
 import 'session_store.dart';
+
+class RoundCompletionResult {
+  const RoundCompletionResult({required this.rounds, required this.reward});
+
+  final int rounds;
+  final ExperienceReward reward;
+}
 
 class StudyProgressService {
   StudyProgressService._();
@@ -31,6 +39,19 @@ class StudyProgressService {
 
   Future<int> incrementRound(String level, int chapter) =>
       _api.incrementRound(level, chapter);
+
+  Future<RoundCompletionResult> completeRound(
+    String level,
+    int chapter,
+  ) async {
+    final rounds = await _api.incrementRound(level, chapter);
+    final reward = await GamificationService.instance.awardRound(
+      level: level,
+      chapter: chapter,
+      roundCount: rounds,
+    );
+    return RoundCompletionResult(rounds: rounds, reward: reward);
+  }
 
   Future<Set<String>> finalKnown(String level) =>
       _api.fetchFinalKnown(level);

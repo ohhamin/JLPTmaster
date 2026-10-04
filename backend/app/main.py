@@ -11,6 +11,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from .auth_store import AuthStore
+from .gamification_store import GamificationStore
 from .store import JsonWordStore
 from .user_data_store import UserDataStore
 
@@ -18,6 +19,7 @@ app = FastAPI(title='JLPTmaster API', version='0.5.0')
 store = JsonWordStore()
 auth_store = AuthStore()
 user_data = UserDataStore()
+gamification = GamificationStore()
 
 app.add_middleware(
     CORSMiddleware,
@@ -211,6 +213,12 @@ class FinalKnownUpdate(BaseModel):
 
 class SettingsUpdate(BaseModel):
     settings: dict[str, Any]
+
+
+class RoundRewardClaim(BaseModel):
+    level: JlptLevel
+    chapter: int = Field(ge=0)
+    round_count: int = Field(ge=1)
 
 
 @app.get('/health')
@@ -552,6 +560,33 @@ def update_settings(
 ) -> dict:
     settings = user_data.update_settings(str(user['id']), payload.settings)
     return {'settings': settings}
+
+
+@app.get('/api/account/leveling')
+def get_account_leveling(user: dict = Depends(current_user)) -> dict:
+    return gamification.status(str(user['id']))
+
+
+@app.post('/api/account/attendance')
+def claim_attendance(user: dict = Depends(current_user)) -> dict:
+    return gamification.claim_daily_attendance(str(user['id']))
+
+
+@app.post('/api/account/round-reward')
+def claim_round_reward(
+    payload: RoundRewardClaim,
+    user: dict = Depends(current_user),
+) -> dict:
+    user_id = str(user['id'])
+    actual_round = user_data.rounds(user_id, payload.level).get(payload.chapter, 0)
+    if actual_round < payload.round_count:
+        raise HTTPException(status_code=409, detail='round completion is not recorded yet')
+    return gamification.award_round(
+        user_id,
+        level=payload.level,
+        chapter=payload.chapter,
+        round_count=payload.round_count,
+    )
 
 
 @app.post('/api/words/{word_id}/explain')

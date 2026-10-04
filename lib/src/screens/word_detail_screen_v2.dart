@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../services/tts_service.dart';
 import '../theme/app_typography.dart';
 import '../theme/theme_controller.dart';
+import '../widgets/tts_pressable.dart';
 
 class WordDetailScreenV2 extends StatefulWidget {
   const WordDetailScreenV2({super.key, required this.word});
@@ -162,11 +163,11 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _speakJapanese(
+              TtsPressable(
+                onPressed: () => _speakJapanese(
                   item.reading.isNotEmpty ? item.reading : item.word,
                 ),
+                alignment: Alignment.centerLeft,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -219,9 +220,9 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
                 ),
                 if (item.exampleJa.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _speakJapanese(item.exampleJa),
+                  TtsPressable(
+                    onPressed: () => _speakJapanese(item.exampleJa),
+                    alignment: Alignment.centerLeft,
                     child: Text(
                       item.exampleJa,
                       style: AppTypography.japanese(
@@ -301,9 +302,10 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
                     ],
                   ),
                   const SizedBox(height: 22),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _speakWord,
+                  TtsPressable(
+                    onPressed: _speakWord,
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -360,11 +362,10 @@ class _WordDetailScreenV2State extends State<WordDetailScreenV2> {
             const SizedBox(height: 30),
             const _SectionLabel(number: '01', title: '예문'),
             const SizedBox(height: 14),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _word.exampleJa.isEmpty
-                  ? null
-                  : () => _speakJapanese(_word.exampleJa),
+            TtsPressable(
+              onPressed: () => _speakJapanese(_word.exampleJa),
+              padding: EdgeInsets.zero,
+              borderRadius: BorderRadius.circular(20),
               child: Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(

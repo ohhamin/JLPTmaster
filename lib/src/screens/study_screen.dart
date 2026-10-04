@@ -6,6 +6,8 @@ import '../services/study_progress_service.dart';
 import '../services/tts_service.dart';
 import '../theme/app_typography.dart';
 import '../theme/theme_controller.dart';
+import '../widgets/level_up_dialog.dart';
+import '../widgets/tts_pressable.dart';
 
 class StudyScreen extends StatefulWidget {
   const StudyScreen({
@@ -260,10 +262,11 @@ class _StudyScreenState extends State<StudyScreen> {
         );
       }
 
-      final rounds = await _progress.incrementRound(
+      final completion = await _progress.completeRound(
         widget.level,
         widget.chapter,
       );
+      final rounds = completion.rounds;
 
       if (!mounted) return;
       setState(() {
@@ -274,7 +277,13 @@ class _StudyScreenState extends State<StudyScreen> {
         _completingRound = false;
       });
 
-      final leave = await _showCompletionDialog(rounds);
+      final leave = await _showCompletionDialog(
+        rounds,
+        completion.reward.xpGained,
+      );
+      if (completion.reward.leveledUp && mounted) {
+        await LevelUpDialog.show(context, completion.reward);
+      }
       if (leave && mounted) {
         Navigator.of(context).pop();
       }
@@ -289,7 +298,7 @@ class _StudyScreenState extends State<StudyScreen> {
     }
   }
 
-  Future<bool> _showCompletionDialog(int rounds) async {
+  Future<bool> _showCompletionDialog(int rounds, int xpGained) async {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -299,8 +308,8 @@ class _StudyScreenState extends State<StudyScreen> {
             ? '${widget.level} 전체 단어 회독 완료!'
             : '챕터를 완료했어요!';
         final description = widget.isFinal
-            ? '${_words.length}개 단어의 알고 있음 상태를 초기화하고 $rounds회독으로 기록했어요.'
-            : '${_words.length}개 단어의 알고 있음 상태를 모두 해제하고 $rounds회독으로 기록했어요.';
+            ? '${_words.length}개 단어의 알고 있음 상태를 초기화하고 $rounds회독으로 기록했어요.\n+$xpGained XP'
+            : '${_words.length}개 단어의 알고 있음 상태를 모두 해제하고 $rounds회독으로 기록했어요.\n+$xpGained XP';
 
         return AlertDialog(
           icon: Icon(
@@ -473,9 +482,9 @@ class _StudyScreenState extends State<StudyScreen> {
                               Semantics(
                                 button: true,
                                 label: '${current.word} 발음 듣기',
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () => _speakWord(current),
+                                child: TtsPressable(
+                                  onPressed: () => _speakWord(current),
+                                  borderRadius: BorderRadius.circular(20),
                                   child: FittedBox(
                                     fit: BoxFit.scaleDown,
                                     child: Text(
@@ -531,11 +540,10 @@ class _StudyScreenState extends State<StudyScreen> {
                                 child: Semantics(
                                   button: current.exampleJa.isNotEmpty,
                                   label: current.exampleJa.isEmpty ? null : '예문 발음 듣기',
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: current.exampleJa.isEmpty
-                                        ? null
-                                        : () => _speakJapanese(current.exampleJa),
+                                  child: TtsPressable(
+                                    onPressed: () => _speakJapanese(current.exampleJa),
+                                    alignment: Alignment.centerLeft,
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
                                     child: Text(
                                       current.exampleJa.isEmpty ? '예문이 없습니다.' : current.exampleJa,
                                       style: AppTypography.japanese(
