@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/study_summary.dart';
 import '../services/api_service.dart';
+import '../theme/theme_controller.dart';
 import 'study_screen.dart';
 
 class ChapterScreen extends StatefulWidget {
@@ -31,12 +32,17 @@ class _ChapterScreenState extends State<ChapterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = 96.0 + MediaQuery.paddingOf(context).bottom;
     return Scaffold(
       appBar: AppBar(
         title: Text(
           '${widget.level} 챕터',
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
+        actions: const [
+          ThemeToggleButton(),
+          SizedBox(width: 8),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -75,16 +81,12 @@ class _ChapterScreenState extends State<ChapterScreen> {
 
             return ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 34),
+              padding: EdgeInsets.fromLTRB(20, 8, 20, bottomPadding),
               itemCount: chapters.length + 1,
               separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 18 : 10),
               itemBuilder: (context, index) {
                 if (index == 0) {
-                  return _ChapterHeader(
-                    level: widget.level,
-                    known: known,
-                    total: total,
-                  );
+                  return _ChapterHeader(level: widget.level, known: known, total: total);
                 }
 
                 final chapter = chapters[index - 1];
@@ -99,7 +101,7 @@ class _ChapterScreenState extends State<ChapterScreen> {
                         ),
                       ),
                     );
-                    if (mounted) _refresh();
+                    if (mounted) await _refresh();
                   },
                 );
               },
@@ -112,11 +114,7 @@ class _ChapterScreenState extends State<ChapterScreen> {
 }
 
 class _ChapterHeader extends StatelessWidget {
-  const _ChapterHeader({
-    required this.level,
-    required this.known,
-    required this.total,
-  });
+  const _ChapterHeader({required this.level, required this.known, required this.total});
 
   final String level;
   final int known;
@@ -187,7 +185,7 @@ class _ChapterRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: scheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.52)),
+            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.72)),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(15, 14, 14, 14),
