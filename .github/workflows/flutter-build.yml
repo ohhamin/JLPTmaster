@@ -61,11 +61,9 @@ jobs:
           PY
           grep -n 'android:label\|android.permission.INTERNET\|android.intent.action.TTS_SERVICE' android/app/src/main/AndroidManifest.xml
 
-      - name: Restore high-resolution raster launcher icon
+      - name: Apply high-resolution raster launcher icon
         run: |
-          mkdir -p assets/branding
-          cat assets/branding/app_icon.part-* > /tmp/jlptmaster-icon.b64
-          base64 --decode /tmp/jlptmaster-icon.b64 > assets/branding/app_icon_1024.jpg
+          test -f assets/branding/app_icon_1024.jpg
           python -m pip install --quiet pillow
           python - <<'PY'
           from pathlib import Path
