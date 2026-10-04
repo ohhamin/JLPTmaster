@@ -1,17 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../theme/theme_controller.dart';
 import 'favorites_screen.dart';
 import 'level_home_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-    required this.themeMode,
-    required this.onThemePressed,
-  });
-
-  final ThemeMode themeMode;
-  final VoidCallback onThemePressed;
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -19,12 +13,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
-
-  IconData get _themeIcon => switch (widget.themeMode) {
-        ThemeMode.system => Icons.brightness_auto_rounded,
-        ThemeMode.light => Icons.light_mode_rounded,
-        ThemeMode.dark => Icons.dark_mode_rounded,
-      };
 
   @override
   Widget build(BuildContext context) {
@@ -35,13 +23,9 @@ class _HomeScreenState extends State<HomeScreen> {
           _index == 0 ? 'JLPTmaster' : '즐겨찾기',
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
-        actions: [
-          IconButton(
-            tooltip: '테마 변경',
-            onPressed: widget.onThemePressed,
-            icon: Icon(_themeIcon),
-          ),
-          const SizedBox(width: 8),
+        actions: const [
+          ThemeToggleButton(),
+          SizedBox(width: 8),
         ],
       ),
       body: _index == 0 ? const LevelHomeScreen() : const FavoritesScreen(),
