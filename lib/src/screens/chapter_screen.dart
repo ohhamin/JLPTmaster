@@ -76,8 +76,7 @@ class _ChapterScreenState extends State<ChapterScreen> {
               );
             }
 
-            final total = chapters.fold<int>(0, (sum, item) => sum + item.total);
-            final known = chapters.fold<int>(0, (sum, item) => sum + item.known);
+            final completed = chapters.where((item) => item.completed).length;
 
             return ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -86,7 +85,11 @@ class _ChapterScreenState extends State<ChapterScreen> {
               separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 18 : 10),
               itemBuilder: (context, index) {
                 if (index == 0) {
-                  return _ChapterHeader(level: widget.level, known: known, total: total);
+                  return _ChapterHeader(
+                    level: widget.level,
+                    completed: completed,
+                    total: chapters.length,
+                  );
                 }
 
                 final chapter = chapters[index - 1];
@@ -114,16 +117,20 @@ class _ChapterScreenState extends State<ChapterScreen> {
 }
 
 class _ChapterHeader extends StatelessWidget {
-  const _ChapterHeader({required this.level, required this.known, required this.total});
+  const _ChapterHeader({
+    required this.level,
+    required this.completed,
+    required this.total,
+  });
 
   final String level;
-  final int known;
+  final int completed;
   final int total;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final progress = total == 0 ? 0.0 : known / total;
+    final progress = total == 0 ? 0.0 : completed / total;
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 4),
       child: Row(
@@ -142,7 +149,7 @@ class _ChapterHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '$known / $total 알고 있음',
+                  '$completed / $total 챕터 완료',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
@@ -174,7 +181,7 @@ class _ChapterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final complete = summary.total > 0 && summary.known == summary.total;
+    final complete = summary.completed;
 
     return Material(
       color: Colors.transparent,
