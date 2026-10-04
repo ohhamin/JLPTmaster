@@ -24,6 +24,8 @@ flutter:
     - assets/branding/app_icon.part-00
     - assets/branding/app_icon.part-01
     - assets/branding/app_icon.part-02
+    - assets/scenes/meadow_light.webp
+    - assets/scenes/cave_dark.webp
   fonts:
     - family: Pretendard
       fonts:

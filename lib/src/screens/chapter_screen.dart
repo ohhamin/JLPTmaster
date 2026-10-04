@@ -47,9 +47,6 @@ class _ChapterScreenState extends State<ChapterScreen> {
       chapters.map((item) => item.chapter),
     );
 
-    // Migrate the old "all known = completed" state into the new round model.
-    // Once a chapter reaches 100%, its known flags are cleared and the first
-    // round is recorded immediately.
     for (final chapter in chapters.where((item) => item.completed)) {
       final words = await _api.fetchWords(
         level: widget.level,
@@ -147,9 +144,9 @@ class _ChapterScreenState extends State<ChapterScreen> {
             for (var index = 0; index < chapters.length; index += 6) {
               groups.add(chapters.sublist(index, math.min(index + 6, chapters.length)));
             }
-            final totalWords = groups.fold<int>(
+            final totalWords = chapters.fold<int>(
               0,
-              (sum, group) => sum + group.last.total,
+              (sum, chapter) => sum + chapter.total,
             );
 
             return ListView.builder(
@@ -223,14 +220,18 @@ class _ChapterHeader extends StatelessWidget {
                 ),
           ),
           const SizedBox(width: 14),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              '$total개 챕터 · 완료할 때마다 회독 +1',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w800,
-                  ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '$total개 챕터 · 완료할 때마다 회독 +1',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
             ),
           ),
         ],
@@ -255,22 +256,29 @@ class _ChapterGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final first = chapters.first;
     final last = chapters.last;
     final rangeLabel = first.chapter == last.chapter
         ? 'Chapter ${first.chapter}'
         : 'Chapter ${first.chapter}–${last.chapter}';
-    final wordsLabel = first.total == last.total
-        ? '${first.total}단어'
-        : '${first.total} → ${last.total}단어';
+    final cumulativeWords = chapters.fold<int>(
+      0,
+      (sum, chapter) => sum + chapter.total,
+    );
+    final wordsLabel = '${first.total} → $cumulativeWords단어 누적';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
       decoration: BoxDecoration(
-        color: scheme.primary.withValues(alpha: 0.035),
+        color: dark
+            ? const Color(0xD9141D28)
+            : const Color(0xDDF7FFF1),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: scheme.primary.withValues(alpha: 0.18),
+          color: dark
+              ? const Color(0xFF374557)
+              : scheme.primary.withValues(alpha: 0.22),
         ),
       ),
       child: Column(
@@ -283,7 +291,7 @@ class _ChapterGroup extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                   decoration: BoxDecoration(
-                    color: scheme.primary.withValues(alpha: 0.14),
+                    color: scheme.primary.withValues(alpha: dark ? 0.15 : 0.14),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Text(
@@ -305,7 +313,7 @@ class _ChapterGroup extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '$wordsLabel 누적',
+                  wordsLabel,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: scheme.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
@@ -318,7 +326,9 @@ class _ChapterGroup extends StatelessWidget {
             final itemIndex = entry.$1;
             final chapter = entry.$2;
             return Padding(
-              padding: EdgeInsets.only(bottom: itemIndex == chapters.length - 1 ? 0 : 8),
+              padding: EdgeInsets.only(
+                bottom: itemIndex == chapters.length - 1 ? 0 : 8,
+              ),
               child: _ChapterRow(
                 summary: chapter,
                 rounds: rounds[chapter.chapter] ?? 0,
@@ -346,7 +356,10 @@ class _ChapterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final completedBefore = rounds > 0;
+    final progress = summary.total == 0 ? 0.0 : summary.known / summary.total;
+    final percent = (progress * 100).round();
 
     return Material(
       color: Colors.transparent,
@@ -355,23 +368,29 @@ class _ChapterRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Ink(
           decoration: BoxDecoration(
-            color: scheme.surfaceContainerLow,
+            color: dark
+                ? const Color(0xED18222E)
+                : const Color(0xF7FFFFFB),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.72)),
+            border: Border.all(
+              color: dark
+                  ? const Color(0xFF344254)
+                  : scheme.outlineVariant.withValues(alpha: 0.78),
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(15, 14, 14, 14),
             child: Row(
               children: [
                 Container(
-                  width: 46,
-                  height: 46,
+                  width: 50,
+                  height: 58,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: completedBefore
                         ? scheme.primary.withValues(alpha: 0.14)
-                        : scheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(14),
+                        : scheme.surfaceContainerHighest.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(15),
                   ),
                   child: completedBefore
                       ? Icon(Icons.done_all_rounded, color: scheme.primary)
@@ -384,30 +403,81 @@ class _ChapterRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: Text(
-                    'Chapter ${summary.chapter}',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Chapter ${summary.chapter}',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text.rich(
+                        TextSpan(
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                          children: [
+                            const TextSpan(text: '알고있음 '),
+                            TextSpan(
+                              text: '${summary.known}',
+                              style: TextStyle(
+                                color: scheme.primary,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            TextSpan(text: ' / 전체 ${summary.total}'),
+                          ],
                         ),
+                      ),
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(
+                                value: progress.clamp(0.0, 1.0),
+                                minHeight: 7,
+                                backgroundColor: scheme.surfaceContainerHighest,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          Text(
+                            '$percent%',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(width: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
                   decoration: BoxDecoration(
                     color: completedBefore
-                        ? scheme.primary.withValues(alpha: 0.11)
-                        : scheme.surfaceContainerHighest,
+                        ? scheme.primary.withValues(alpha: 0.12)
+                        : scheme.surfaceContainerHighest.withValues(alpha: 0.94),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '$rounds회독',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: completedBefore ? scheme.primary : scheme.onSurfaceVariant,
+                          color: completedBefore
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant,
                           fontWeight: FontWeight.w900,
                         ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 9),
                 Icon(
                   Icons.arrow_forward_ios_rounded,
                   size: 16,
@@ -438,6 +508,7 @@ class _FinalSetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -446,10 +517,12 @@ class _FinalSetCard extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.fromLTRB(18, 17, 16, 17),
           decoration: BoxDecoration(
-            color: scheme.primary.withValues(alpha: 0.08),
+            color: dark
+                ? const Color(0xE218222E)
+                : const Color(0xEAF7FFF1),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: scheme.primary.withValues(alpha: 0.28),
+              color: scheme.primary.withValues(alpha: dark ? 0.32 : 0.28),
             ),
           ),
           child: Row(
