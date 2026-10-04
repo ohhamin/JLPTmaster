@@ -46,19 +46,24 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     await future;
   }
 
+  List<Word> _dedupe(List<Word> source) {
+    final seen = <String>{};
+    return source.where((word) => seen.add(word.word)).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Word>>(
       future: _favorites,
       builder: (context, snapshot) {
-        final words = snapshot.data ?? const <Word>[];
+        final words = _dedupe(snapshot.data ?? const <Word>[]);
         return RefreshIndicator(
           onRefresh: _refresh,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
                 sliver: SliverToBoxAdapter(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,7 +76,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           prefixIcon: Icon(Icons.search_rounded),
                         ),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Text(
@@ -117,30 +122,23 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               else
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 36),
-                  sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisExtent: 158,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final word = words[index];
-                        return _FavoriteTile(
-                          word: word,
-                          onTap: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => WordDetailScreen(word: word),
-                              ),
-                            );
-                            if (mounted) _reload();
-                          },
-                        );
-                      },
-                      childCount: words.length,
-                    ),
+                  sliver: SliverList.separated(
+                    itemCount: words.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 7),
+                    itemBuilder: (context, index) {
+                      final word = words[index];
+                      return _FavoriteRow(
+                        word: word,
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => WordDetailScreen(word: word),
+                            ),
+                          );
+                          if (mounted) _reload();
+                        },
+                      );
+                    },
                   ),
                 ),
             ],
@@ -151,8 +149,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 }
 
-class _FavoriteTile extends StatelessWidget {
-  const _FavoriteTile({required this.word, required this.onTap});
+class _FavoriteRow extends StatelessWidget {
+  const _FavoriteRow({required this.word, required this.onTap});
 
   final Word word;
   final VoidCallback onTap;
@@ -164,66 +162,74 @@ class _FavoriteTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         child: Ink(
-          padding: const EdgeInsets.all(15),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.52)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: scheme.primary.withValues(alpha: 0.11),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      word.level,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: scheme.primary,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.11),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  word.level,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 5,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      word.word,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w900,
                           ),
                     ),
-                  ),
-                  const Spacer(),
-                  Icon(Icons.star_rounded, size: 18, color: scheme.primary),
-                ],
+                    if (word.reading.isNotEmpty) ...[
+                      const SizedBox(height: 1),
+                      Text(
+                        word.reading,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              const Spacer(),
-              Text(
-                word.word,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-              ),
-              if (word.reading.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  word.reading,
-                  maxLines: 1,
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 4,
+                child: Text(
+                  word.meaningKo,
+                  maxLines: 2,
+                  textAlign: TextAlign.right,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                 ),
-              ],
-              const SizedBox(height: 8),
-              Text(
-                word.meaningKo,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
               ),
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right_rounded, size: 20, color: scheme.onSurfaceVariant),
             ],
           ),
         ),
