@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/word.dart';
 import '../services/api_service.dart';
+import '../services/tts_service.dart';
 import '../theme/theme_controller.dart';
 
 class WordDetailScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class WordDetailScreen extends StatefulWidget {
 
 class _WordDetailScreenState extends State<WordDetailScreen> {
   final ApiService _api = ApiService();
+  final TtsService _tts = TtsService.instance;
   late Word _word;
   bool _savingFavorite = false;
   bool _savingKnown = false;
@@ -25,6 +27,29 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     super.initState();
     _word = widget.word;
     _refreshWord();
+  }
+
+  @override
+  void dispose() {
+    _tts.stop();
+    super.dispose();
+  }
+
+  Future<void> _speakJapanese(String text) async {
+    try {
+      await _tts.speakJapanese(text);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('음성 재생을 사용할 수 없습니다. 기기 TTS의 일본어 음성을 확인해 주세요.'),
+        ),
+      );
+    }
+  }
+
+  void _speakWord() {
+    _speakJapanese(_word.reading.isNotEmpty ? _word.reading : _word.word);
   }
 
   Future<void> _refreshWord() async {
@@ -291,12 +316,20 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 22),
-                  Text(
-                    _word.word,
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -1.2,
-                        ),
+                  Semantics(
+                    button: true,
+                    label: '${_word.word} 발음 듣기',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _speakWord,
+                      child: Text(
+                        _word.word,
+                        style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -1.2,
+                            ),
+                      ),
+                    ),
                   ),
                   if (_word.reading.isNotEmpty) ...[
                     const SizedBox(height: 4),
@@ -361,12 +394,22 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          _word.exampleJa.isEmpty ? '예문이 없습니다.' : _word.exampleJa,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                height: 1.55,
-                                fontWeight: FontWeight.w700,
-                              ),
+                        Semantics(
+                          button: _word.exampleJa.isNotEmpty,
+                          label: _word.exampleJa.isEmpty ? null : '예문 발음 듣기',
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _word.exampleJa.isEmpty
+                                ? null
+                                : () => _speakJapanese(_word.exampleJa),
+                            child: Text(
+                              _word.exampleJa.isEmpty ? '예문이 없습니다.' : _word.exampleJa,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    height: 1.55,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
                         ),
                         if (_word.exampleReading.isNotEmpty) ...[
                           const SizedBox(height: 10),
