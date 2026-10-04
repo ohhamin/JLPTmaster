@@ -5,6 +5,7 @@ class LevelSummary {
     required this.known,
     required this.favorites,
     required this.chapters,
+    required this.completedChapters,
   });
 
   final String level;
@@ -12,8 +13,9 @@ class LevelSummary {
   final int known;
   final int favorites;
   final int chapters;
+  final int completedChapters;
 
-  double get progress => total == 0 ? 0 : known / total;
+  double get progress => chapters == 0 ? 0 : completedChapters / chapters;
 
   factory LevelSummary.fromJson(Map<String, dynamic> json) => LevelSummary(
         level: json['level'] as String? ?? 'N5',
@@ -21,6 +23,7 @@ class LevelSummary {
         known: (json['known'] as num?)?.toInt() ?? 0,
         favorites: (json['favorites'] as num?)?.toInt() ?? 0,
         chapters: (json['chapters'] as num?)?.toInt() ?? 0,
+        completedChapters: (json['completed_chapters'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -30,12 +33,14 @@ class ChapterSummary {
     required this.chapter,
     required this.total,
     required this.known,
+    required this.completed,
   });
 
   final String level;
   final int chapter;
   final int total;
   final int known;
+  final bool completed;
 
   double get progress => total == 0 ? 0 : known / total;
 
@@ -44,5 +49,6 @@ class ChapterSummary {
         chapter: (json['chapter'] as num?)?.toInt() ?? 1,
         total: (json['total'] as num?)?.toInt() ?? 0,
         known: (json['known'] as num?)?.toInt() ?? 0,
+        completed: json['completed'] as bool? ?? false,
       );
 }
