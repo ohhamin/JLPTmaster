@@ -8,6 +8,7 @@ import 'services/study_progress_service.dart';
 import 'services/tts_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
+import 'widgets/app_scene_background.dart';
 import 'widgets/level_up_dialog.dart';
 
 class JlptMasterApp extends StatelessWidget {
@@ -114,8 +115,12 @@ class _AuthGateState extends State<_AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return const AppSceneBackground(
+        playful: true,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
     if (!_authenticated) {
