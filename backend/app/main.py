@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from .store import JsonWordStore
 
-app = FastAPI(title='JLPTmaster API', version='0.4.0')
+app = FastAPI(title='JLPTmaster API', version='0.4.1')
 store = JsonWordStore()
 
 app.add_middleware(
@@ -31,6 +31,20 @@ _STATE_UPDATE_FIELDS = {'favorite', 'known', 'correct_count', 'wrong_count'}
 def _block_start(chapter: int) -> int:
     """Every six chapters starts a fresh cumulative study block."""
     return ((chapter - 1) // 6) * 6 + 1
+
+
+def _split_scoped_id(word_id: str) -> tuple[str, int | None]:
+    base, separator, suffix = word_id.rpartition('@')
+    if separator and base and suffix.isdigit():
+        return base, int(suffix)
+    return word_id, None
+
+
+def _scope_word(word: dict, chapter: int) -> dict:
+    scoped = dict(word)
+    scoped['id'] = f"{word.get('id', '')}@{chapter}"
+    scoped['study_chapter'] = chapter
+    return scoped
 
 
 def _study_words(level: str, chapter: int) -> list[dict]:
@@ -88,7 +102,7 @@ class WordUpdate(BaseModel):
 
 
 class WordStateUpdate(BaseModel):
-    word_id: str = Field(min_length=1, max_length=120)
+    word_id: str = Field(min_length=1, max_length=160)
     chapter: int | None = Field(default=None, ge=1)
     favorite: bool | None = None
     known: bool | None = None
@@ -186,6 +200,8 @@ def get_words(
             or needle in word.get('reading', '').lower()
             or needle in word.get('meaning_ko', '').lower()
         ]
+    if chapter is not None:
+        words = [_scope_word(word, chapter) for word in words]
     return words
 
 
@@ -194,10 +210,12 @@ def get_word(
     word_id: str,
     chapter: int | None = Query(default=None, ge=1),
 ) -> dict:
-    word = store.get_word(word_id, known_chapter=chapter)
+    base_id, scoped_chapter = _split_scoped_id(word_id)
+    effective_chapter = chapter or scoped_chapter
+    word = store.get_word(base_id, known_chapter=effective_chapter)
     if word is None:
         raise HTTPException(status_code=404, detail='word not found')
-    return word
+    return _scope_word(word, effective_chapter) if scoped_chapter is not None and effective_chapter else word
 
 
 @app.post('/api/words', status_code=201)
@@ -221,40 +239,47 @@ def update_word(
     payload: WordUpdate,
     study_chapter: int | None = Query(default=None, ge=1),
 ) -> dict:
-    current = store.get_word(word_id, known_chapter=study_chapter)
+    base_id, scoped_chapter = _split_scoped_id(word_id)
+    effective_chapter = study_chapter or scoped_chapter
+    current = store.get_word(base_id, known_chapter=effective_chapter)
     if current is None:
         raise HTTPException(status_code=404, detail='word not found')
 
     changes = payload.model_dump(exclude_none=True)
     now = datetime.now(timezone.utc).isoformat()
     if set(changes).issubset(_STATE_UPDATE_FIELDS):
-        state_update = {'word_id': word_id, **changes, 'updated_at': now}
-        if study_chapter is not None:
-            state_update['chapter'] = study_chapter
+        state_update = {'word_id': base_id, **changes, 'updated_at': now}
+        if effective_chapter is not None:
+            state_update['chapter'] = effective_chapter
         try:
-            return store.update_states([state_update])[0]
+            result = store.update_states([state_update])[0]
+            return _scope_word(result, effective_chapter) if scoped_chapter is not None and effective_chapter else result
         except KeyError as exc:
             raise HTTPException(status_code=404, detail='word not found') from exc
 
     changes['updated_at'] = now
     updated = {**current, **changes}
-    if study_chapter is not None:
-        updated['study_chapter'] = study_chapter
-    store.replace_word(word_id, updated)
-    return store.get_word(word_id, known_chapter=study_chapter) or updated
+    if effective_chapter is not None:
+        updated['study_chapter'] = effective_chapter
+    store.replace_word(base_id, updated)
+    result = store.get_word(base_id, known_chapter=effective_chapter) or updated
+    return _scope_word(result, effective_chapter) if scoped_chapter is not None and effective_chapter else result
 
 
 @app.post('/api/progress/batch')
 def update_progress_batch(payload: BatchStateUpdate) -> dict:
     now = datetime.now(timezone.utc).isoformat()
-    updates = [
-        {
-            'word_id': item.word_id,
+    updates: list[dict] = []
+    for item in payload.updates:
+        base_id, scoped_chapter = _split_scoped_id(item.word_id)
+        update = {
+            'word_id': base_id,
             **item.model_dump(exclude={'word_id'}, exclude_none=True),
             'updated_at': now,
         }
-        for item in payload.updates
-    ]
+        if item.chapter is None and scoped_chapter is not None:
+            update['chapter'] = scoped_chapter
+        updates.append(update)
     try:
         updated = store.update_states(updates)
     except KeyError as exc:
@@ -264,7 +289,8 @@ def update_progress_batch(payload: BatchStateUpdate) -> dict:
 
 @app.post('/api/words/{word_id}/explain')
 def explain_word(word_id: str) -> dict[str, str]:
-    word = store.get_word(word_id)
+    base_id, scoped_chapter = _split_scoped_id(word_id)
+    word = store.get_word(base_id, known_chapter=scoped_chapter)
     if word is None:
         raise HTTPException(status_code=404, detail='word not found')
 
@@ -311,6 +337,7 @@ def explain_word(word_id: str) -> dict[str, str]:
 
 @app.delete('/api/words/{word_id}')
 def delete_word(word_id: str) -> dict[str, bool]:
-    if not store.delete_word(word_id):
+    base_id, _ = _split_scoped_id(word_id)
+    if not store.delete_word(base_id):
         raise HTTPException(status_code=404, detail='word not found')
     return {'deleted': True}
