@@ -144,10 +144,9 @@ class _ChapterScreenState extends State<ChapterScreen> {
             for (var index = 0; index < chapters.length; index += 6) {
               groups.add(chapters.sublist(index, math.min(index + 6, chapters.length)));
             }
-            final totalWords = chapters.fold<int>(
-              0,
-              (sum, chapter) => sum + chapter.total,
-            );
+            // ChapterSummary.total is cumulative for this level (50, 100, ...),
+            // so the final chapter already represents the level-wide word count.
+            final totalWords = chapters.last.total;
 
             return ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -262,11 +261,8 @@ class _ChapterGroup extends StatelessWidget {
     final rangeLabel = first.chapter == last.chapter
         ? 'Chapter ${first.chapter}'
         : 'Chapter ${first.chapter}–${last.chapter}';
-    final cumulativeWords = chapters.fold<int>(
-      0,
-      (sum, chapter) => sum + chapter.total,
-    );
-    final wordsLabel = '${first.total} → $cumulativeWords단어 누적';
+    // Totals are cumulative chapter endpoints; summing them double-counts words.
+    final wordsLabel = '${first.total} → ${last.total}단어 누적';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
@@ -392,14 +388,13 @@ class _ChapterRow extends StatelessWidget {
                         : scheme.surfaceContainerHighest.withValues(alpha: 0.92),
                     borderRadius: BorderRadius.circular(15),
                   ),
-                  child: completedBefore
-                      ? Icon(Icons.done_all_rounded, color: scheme.primary)
-                      : Text(
-                          summary.chapter.toString().padLeft(2, '0'),
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w900,
-                              ),
+                  child: Text(
+                    summary.chapter.toString().padLeft(2, '0'),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: completedBefore ? scheme.primary : null,
                         ),
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
