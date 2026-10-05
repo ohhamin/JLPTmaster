@@ -112,7 +112,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
     });
   }
 
-  Future<Uint8List> _captureCardPng() async {
+  Future<Uint8List> _captureStaticCardPng() async {
     await WidgetsBinding.instance.endOfFrame;
     final renderObject = _cardCaptureKey.currentContext?.findRenderObject();
     if (renderObject is! RenderRepaintBoundary) {
@@ -137,7 +137,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
       _selectedUid = null;
     });
     try {
-      final pngBytes = await _captureCardPng();
+      final pngBytes = await _captureStaticCardPng();
       final saved = await CardCustomizationService.instance.save(_items);
       await CardImageService.instance.upload(pngBytes);
       if (!mounted) return;
@@ -149,6 +149,68 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
         SnackBar(content: Text('카드를 저장하지 못했어요. $error')),
       );
     }
+  }
+
+  Widget _buildEditableArtwork(ColorScheme scheme) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const UserCardArtwork(),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final cardWidth = constraints.maxWidth;
+            final cardHeight = constraints.maxHeight;
+            return Stack(
+              clipBehavior: Clip.hardEdge,
+              children: _items.map((item) {
+                final baseSize = cardWidth * 0.16;
+                final size = baseSize * item.scale;
+                final isSelected = item.uid == _selectedUid;
+                return Positioned(
+                  left: item.x * cardWidth - size / 2,
+                  top: item.y * cardHeight - size / 2,
+                  width: size,
+                  height: size,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () => setState(() => _selectedUid = item.uid),
+                    onPanStart: (_) => setState(() => _selectedUid = item.uid),
+                    onPanUpdate: (details) => _move(
+                      item.uid,
+                      details.delta.dx,
+                      details.delta.dy,
+                      cardWidth,
+                      cardHeight,
+                    ),
+                    child: Transform.rotate(
+                      angle: item.rotation * math.pi / 180,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: isSelected
+                              ? Border.all(
+                                  color: scheme.primary,
+                                  width: 2.4,
+                                )
+                              : null,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(2),
+                          child: CardDecorationVisual(
+                            assetId: item.assetId,
+                            size: size - 4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
   }
 
   @override
@@ -191,74 +253,24 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                 ),
           ),
           const SizedBox(height: 14),
-          RepaintBoundary(
-            key: _cardCaptureKey,
-            child: AspectRatio(
-              aspectRatio: 4 / 3,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  UserProfileCard(
+          AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                RepaintBoundary(
+                  key: _cardCaptureKey,
+                  child: _buildEditableArtwork(scheme),
+                ),
+                IgnorePointer(
+                  child: UserCardInfoOverlay(
                     nickname: widget.nickname,
                     level: widget.level,
                     experience: widget.experience,
                     xpRequired: widget.xpRequired,
                   ),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final cardWidth = constraints.maxWidth;
-                      final cardHeight = constraints.maxHeight;
-                      return Stack(
-                        clipBehavior: Clip.hardEdge,
-                        children: _items.map((item) {
-                          final baseSize = cardWidth * 0.16;
-                          final size = baseSize * item.scale;
-                          final isSelected = item.uid == _selectedUid;
-                          return Positioned(
-                            left: item.x * cardWidth - size / 2,
-                            top: item.y * cardHeight - size / 2,
-                            width: size,
-                            height: size,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onTap: () => setState(() => _selectedUid = item.uid),
-                              onPanStart: (_) => setState(() => _selectedUid = item.uid),
-                              onPanUpdate: (details) => _move(
-                                item.uid,
-                                details.delta.dx,
-                                details.delta.dy,
-                                cardWidth,
-                                cardHeight,
-                              ),
-                              child: Transform.rotate(
-                                angle: item.rotation * math.pi / 180,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: isSelected
-                                        ? Border.all(
-                                            color: scheme.primary,
-                                            width: 2.4,
-                                          )
-                                        : null,
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(2),
-                                    child: CardDecorationVisual(
-                                      assetId: item.assetId,
-                                      size: size - 4,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 14),
@@ -380,7 +392,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            '저장하면 장식 배치 정보와 완성된 카드 PNG가 함께 서버에 저장돼요. 다시 수정하면 같은 사용자 카드 파일을 덮어써서 용량이 계속 늘어나지 않아요.',
+            '서버에는 카드 그림과 장식만 한 장의 이미지로 저장해요. 닉네임·레벨·경험치·게이지는 저장하지 않고 앱이 최신 계정 정보를 받아 실시간으로 위에 그려줍니다.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                   height: 1.45,
