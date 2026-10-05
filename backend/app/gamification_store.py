@@ -6,6 +6,8 @@ import os
 import threading
 from pathlib import Path
 
+from .user_data_store import UserDataStore
+
 
 def _env_int(name: str, default: int) -> int:
     try:
@@ -24,6 +26,7 @@ class GamificationStore:
         self.daily_xp = max(0, _env_int('DAILY_ATTENDANCE_XP', 5))
         self.round_xp = max(0, _env_int('ROUND_COMPLETION_XP', 30))
         self.timezone_offset_hours = _env_int('APP_TIMEZONE_OFFSET_HOURS', 9)
+        self.user_data = UserDataStore()
         self._lock = threading.RLock()
 
     def _path(self, user_id: str) -> Path:
@@ -74,8 +77,6 @@ class GamificationStore:
             data['current_attendance_streak'],
             int(data.get('max_attendance_streak') or 0),
         )
-        # Existing users may already have an attendance date from before streak
-        # tracking was introduced. Preserve that day as a one-day streak.
         if data.get('last_attendance_date') and data['current_attendance_streak'] == 0:
             data['current_attendance_streak'] = 1
             data['max_attendance_streak'] = max(data['max_attendance_streak'], 1)
@@ -131,6 +132,7 @@ class GamificationStore:
                     'levels_gained': 0,
                     'leveled_up': False,
                     'attendance_awarded': False,
+                    'streak_reward_decoration_id': None,
                 }
 
             previous_date = None
@@ -157,7 +159,18 @@ class GamificationStore:
             )
             reward = self._award_locked(data, self.daily_xp)
             self._write_json(self._path(user_id), data)
-            return {**reward, 'attendance_awarded': True}
+
+            streak_reward_decoration_id = None
+            if current_streak > 0 and current_streak % 5 == 0:
+                streak_reward_decoration_id = self.user_data.grant_random_card_decoration(
+                    user_id,
+                )
+
+            return {
+                **reward,
+                'attendance_awarded': True,
+                'streak_reward_decoration_id': streak_reward_decoration_id,
+            }
 
     def award_round(
         self,
@@ -179,9 +192,14 @@ class GamificationStore:
                     'levels_gained': 0,
                     'leveled_up': False,
                     'round_rewarded': False,
+                    'streak_reward_decoration_id': None,
                 }
             rewarded.add(reward_key)
             data['rewarded_rounds'] = sorted(rewarded)
             reward = self._award_locked(data, self.round_xp)
             self._write_json(self._path(user_id), data)
-            return {**reward, 'round_rewarded': True}
+            return {
+                **reward,
+                'round_rewarded': True,
+                'streak_reward_decoration_id': None,
+            }
