@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  audioplayers: ^6.1.0
   flutter_tts: ^4.2.5
   gal: ^2.3.3
   http: ^1.2.2
@@ -27,6 +28,7 @@ flutter:
     - assets/branding/app_icon.part-02
     - assets/cards/
     - assets/decorations/
+    - assets/audio/
     - assets/scenes/meadow_light.webp
     - assets/scenes/cave_dark.webp
   fonts:
