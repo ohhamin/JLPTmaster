@@ -28,7 +28,9 @@ flutter:
     - assets/branding/app_icon.part-02
     - assets/cards/
     - assets/decorations/
-    - assets/audio/
+    - assets/audio/chiikawa.mp3
+    - assets/audio/usagi.mp3
+    - assets/audio/hachiware.mp3
     - assets/scenes/meadow_light.webp
     - assets/scenes/cave_dark.webp
   fonts:
