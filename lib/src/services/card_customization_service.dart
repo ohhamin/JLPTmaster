@@ -41,9 +41,11 @@ class CardDecorationPlacement {
     return CardDecorationPlacement(
       uid: json['uid']?.toString() ?? '',
       assetId: json['asset_id']?.toString() ?? '',
-      x: ((json['x'] as num?)?.toDouble() ?? 0.78).clamp(0.0, 1.0),
-      y: ((json['y'] as num?)?.toDouble() ?? 0.30).clamp(0.0, 1.0),
-      scale: ((json['scale'] as num?)?.toDouble() ?? 1.0).clamp(0.45, 2.2),
+      x: ((json['x'] as num?)?.toDouble() ?? 0.78).clamp(0.0, 1.0).toDouble(),
+      y: ((json['y'] as num?)?.toDouble() ?? 0.30).clamp(0.0, 1.0).toDouble(),
+      scale: ((json['scale'] as num?)?.toDouble() ?? 1.0)
+          .clamp(0.45, 2.2)
+          .toDouble(),
       rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
     );
   }
@@ -95,9 +97,9 @@ class CardCustomizationService {
         .take(24)
         .map(
           (item) => item.copyWith(
-            x: item.x.clamp(0.0, 1.0),
-            y: item.y.clamp(0.0, 1.0),
-            scale: item.scale.clamp(0.45, 2.2),
+            x: item.x.clamp(0.0, 1.0).toDouble(),
+            y: item.y.clamp(0.0, 1.0).toDouble(),
+            scale: item.scale.clamp(0.45, 2.2).toDouble(),
           ),
         )
         .toList(growable: false);
