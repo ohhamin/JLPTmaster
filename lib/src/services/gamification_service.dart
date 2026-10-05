@@ -49,6 +49,7 @@ class ExperienceReward extends LevelingStatus {
     required this.previousLevel,
     required this.levelsGained,
     required this.leveledUp,
+    this.attendanceAwarded = false,
     super.lastAttendanceDate,
   });
 
@@ -56,6 +57,7 @@ class ExperienceReward extends LevelingStatus {
   final int previousLevel;
   final int levelsGained;
   final bool leveledUp;
+  final bool attendanceAwarded;
 
   factory ExperienceReward.fromJson(Map<String, dynamic> json) => ExperienceReward(
         level: (json['level'] as num?)?.toInt() ?? 1,
@@ -69,6 +71,7 @@ class ExperienceReward extends LevelingStatus {
         previousLevel: (json['previous_level'] as num?)?.toInt() ?? 1,
         levelsGained: (json['levels_gained'] as num?)?.toInt() ?? 0,
         leveledUp: json['leveled_up'] == true,
+        attendanceAwarded: json['attendance_awarded'] == true,
       );
 }
 
