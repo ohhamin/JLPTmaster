@@ -39,7 +39,8 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
   @override
   void initState() {
     super.initState();
-    _items = widget.initialDecorations.toList(growable: true);
+    _items = widget.initialDecorations.take(1).toList(growable: true);
+    if (_items.isNotEmpty) _selectedUid = _items.first.uid;
   }
 
   CardDecorationPlacement? get _selected {
@@ -59,17 +60,15 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
   }
 
   void _replace(CardDecorationPlacement placement) {
-    final index = _items.indexWhere((item) => item.uid == placement.uid);
-    if (index < 0) return;
-    setState(() => _items[index] = placement);
+    if (_items.isEmpty) return;
+    setState(() => _items[0] = placement);
   }
 
   void _move(String uid, double dx, double dy, double cardWidth, double cardHeight) {
-    final index = _items.indexWhere((item) => item.uid == uid);
-    if (index < 0) return;
-    final current = _items[index];
+    if (_items.isEmpty || _items.first.uid != uid) return;
+    final current = _items.first;
     setState(() {
-      _items[index] = current.copyWith(
+      _items[0] = current.copyWith(
         x: (current.x + dx / cardWidth).clamp(0.02, 0.98).toDouble(),
         y: (current.y + dy / cardHeight).clamp(0.02, 0.98).toDouble(),
       );
@@ -77,40 +76,28 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
   }
 
   void _add(CardDecorationDefinition definition) {
-    if (_items.length >= 24) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('장식은 최대 24개까지 놓을 수 있어요.')),
-      );
-      return;
-    }
-    final count = _items.length;
     final placement = CardDecorationPlacement(
       uid: '${DateTime.now().microsecondsSinceEpoch}_${definition.id}',
       assetId: definition.id,
-      x: (0.76 + (count % 3) * 0.035).clamp(0.08, 0.92).toDouble(),
-      y: (0.27 + (count % 4) * 0.03).clamp(0.08, 0.90).toDouble(),
+      x: 0.76,
+      y: 0.27,
     );
     setState(() {
-      _items.add(placement);
+      _items
+        ..clear()
+        ..add(placement);
       _selectedUid = placement.uid;
     });
   }
 
   void _removeSelected() {
-    final uid = _selectedUid;
-    if (uid == null) return;
-    setState(() {
-      _items.removeWhere((item) => item.uid == uid);
-      _selectedUid = null;
-    });
-  }
-
-  void _reset() {
     setState(() {
       _items.clear();
       _selectedUid = null;
     });
   }
+
+  void _reset() => _removeSelected();
 
   Future<Uint8List> _captureStaticCardPng() async {
     await WidgetsBinding.instance.endOfFrame;
@@ -163,7 +150,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
             return Stack(
               clipBehavior: Clip.hardEdge,
               children: _items.map((item) {
-                final baseSize = cardWidth * 0.16;
+                final baseSize = cardWidth * 0.18;
                 final size = baseSize * item.scale;
                 final isSelected = item.uid == _selectedUid;
                 return Positioned(
@@ -188,10 +175,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(14),
                           border: isSelected
-                              ? Border.all(
-                                  color: scheme.primary,
-                                  width: 2.4,
-                                )
+                              ? Border.all(color: scheme.primary, width: 2.4)
                               : null,
                         ),
                         child: Padding(
@@ -242,163 +226,170 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
           const SizedBox(width: 12),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 36),
-        children: [
-          Text(
-            '장식을 눌러 추가하고 카드 위에서 드래그해서 옮겨보세요.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  height: 1.4,
-                ),
-          ),
-          const SizedBox(height: 14),
-          AspectRatio(
-            aspectRatio: 4 / 3,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                RepaintBoundary(
-                  key: _cardCaptureKey,
-                  child: _buildEditableArtwork(scheme),
-                ),
-                IgnorePointer(
-                  child: UserCardInfoOverlay(
-                    nickname: widget.nickname,
-                    level: widget.level,
-                    experience: widget.experience,
-                    xpRequired: widget.xpRequired,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          if (selected != null) ...[
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 13, 12, 14),
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: scheme.outlineVariant),
-              ),
-              child: Column(
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
+        child: Column(
+          children: [
+            AspectRatio(
+              aspectRatio: 4 / 3,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          selectedDefinition?.label ?? '선택한 장식',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w900,
-                              ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '장식 삭제',
-                        onPressed: _removeSelected,
-                        icon: const Icon(Icons.delete_outline_rounded),
-                      ),
-                    ],
+                  RepaintBoundary(
+                    key: _cardCaptureKey,
+                    child: _buildEditableArtwork(scheme),
                   ),
-                  _EditorSlider(
-                    label: '크기',
-                    valueText: '${(selected.scale * 100).round()}%',
-                    value: selected.scale,
-                    min: 0.45,
-                    max: 2.2,
-                    onChanged: (value) => _replace(selected.copyWith(scale: value)),
-                  ),
-                  _EditorSlider(
-                    label: '회전',
-                    valueText: '${selected.rotation.round()}°',
-                    value: selected.rotation.clamp(-180, 180).toDouble(),
-                    min: -180,
-                    max: 180,
-                    onChanged: (value) => _replace(selected.copyWith(rotation: value)),
+                  IgnorePointer(
+                    child: UserCardInfoOverlay(
+                      nickname: widget.nickname,
+                      level: widget.level,
+                      experience: widget.experience,
+                      xpRequired: widget.xpRequired,
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 18),
-          ],
-          Row(
-            children: [
-              Text(
-                '장식',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-              ),
-              const Spacer(),
-              Text(
-                '${_items.length}/24',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: cardDecorationCatalog.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 0.83,
-            ),
-            itemBuilder: (context, index) {
-              final decoration = cardDecorationCatalog[index];
-              return InkWell(
-                onTap: () => _add(decoration),
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(7, 8, 7, 6),
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: scheme.outlineVariant.withValues(alpha: 0.8),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: FittedBox(
-                          child: CardDecorationVisual(
-                            assetId: decoration.id,
-                            size: 64,
+            if (selected != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: scheme.outlineVariant),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            selectedDefinition?.label ?? '선택한 장식',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                ),
                           ),
                         ),
+                        IconButton(
+                          tooltip: '장식 삭제',
+                          onPressed: _removeSelected,
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.delete_outline_rounded),
+                        ),
+                      ],
+                    ),
+                    _EditorSlider(
+                      label: '크기',
+                      valueText: '${(selected.scale * 100).round()}%',
+                      value: selected.scale,
+                      min: 0.45,
+                      max: 2.2,
+                      onChanged: (value) => _replace(selected.copyWith(scale: value)),
+                    ),
+                    _EditorSlider(
+                      label: '회전',
+                      valueText: '${selected.rotation.round()}°',
+                      value: selected.rotation.clamp(-180, 180).toDouble(),
+                      min: -180,
+                      max: 180,
+                      onChanged: (value) => _replace(selected.copyWith(rotation: value)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Text(
+                  '장식',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        decoration.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
+                ),
+                const Spacer(),
+                Text(
+                  '${_items.isEmpty ? 0 : 1}/1',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const columns = 4;
+                  const gap = 8.0;
+                  final rows = (cardDecorationCatalog.length / columns).ceil();
+                  final tileWidth =
+                      (constraints.maxWidth - gap * (columns - 1)) / columns;
+                  final tileHeight =
+                      (constraints.maxHeight - gap * (rows - 1)) / rows;
+                  final ratio = tileHeight <= 0 ? 1.0 : tileWidth / tileHeight;
+
+                  return GridView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: EdgeInsets.zero,
+                    itemCount: cardDecorationCatalog.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      mainAxisSpacing: gap,
+                      crossAxisSpacing: gap,
+                      childAspectRatio: ratio,
+                    ),
+                    itemBuilder: (context, index) {
+                      final decoration = cardDecorationCatalog[index];
+                      final selectedAsset =
+                          _items.isNotEmpty && _items.first.assetId == decoration.id;
+                      return InkWell(
+                        onTap: () => _add(decoration),
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(6, 6, 6, 5),
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: selectedAsset
+                                  ? scheme.primary
+                                  : scheme.outlineVariant.withValues(alpha: 0.8),
+                              width: selectedAsset ? 2 : 1,
                             ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '서버에는 카드 그림과 장식만 한 장의 이미지로 저장해요. 닉네임·레벨·경험치·게이지는 저장하지 않고 앱이 최신 계정 정보를 받아 실시간으로 위에 그려줍니다.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  height: 1.45,
-                ),
-          ),
-        ],
+                          ),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: FittedBox(
+                                  child: CardDecorationVisual(
+                                    assetId: decoration.id,
+                                    size: 64,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                decoration.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -423,36 +414,39 @@ class _EditorSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 42,
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+    return SizedBox(
+      height: 34,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 38,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
           ),
-        ),
-        Expanded(
-          child: Slider(
-            value: value.clamp(min, max).toDouble(),
-            min: min,
-            max: max,
-            onChanged: onChanged,
+          Expanded(
+            child: Slider(
+              value: value.clamp(min, max).toDouble(),
+              min: min,
+              max: max,
+              onChanged: onChanged,
+            ),
           ),
-        ),
-        SizedBox(
-          width: 48,
-          child: Text(
-            valueText,
-            textAlign: TextAlign.end,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+          SizedBox(
+            width: 44,
+            child: Text(
+              valueText,
+              textAlign: TextAlign.end,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
