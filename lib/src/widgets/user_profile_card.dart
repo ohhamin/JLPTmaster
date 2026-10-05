@@ -24,6 +24,40 @@ class UserProfileCard extends StatelessWidget {
   final bool loading;
   final List<CardDecorationPlacement> decorations;
 
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 4 / 3,
+      child: Stack(
+        fit: StackFit.expand,
+        clipBehavior: Clip.hardEdge,
+        children: [
+          UserCardArtwork(decorations: decorations),
+          UserCardInfoOverlay(
+            nickname: nickname,
+            level: level,
+            experience: experience,
+            xpRequired: xpRequired,
+            loading: loading,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The persistent part of a user's card.
+///
+/// This contains only artwork and decorations. Nickname / level / XP are
+/// intentionally excluded so earning XP never requires uploading a new image.
+class UserCardArtwork extends StatelessWidget {
+  const UserCardArtwork({
+    super.key,
+    this.decorations = const [],
+  });
+
+  final List<CardDecorationPlacement> decorations;
+
   static const int _artworkPartCount = 14;
   static Future<Uint8List>? _artworkBytes;
 
@@ -43,117 +77,148 @@ class UserProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List>(
+      future: _loadArtwork(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFCF6),
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: const CircularProgressIndicator(strokeWidth: 2.5),
+          );
+        }
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final height = constraints.maxHeight;
+            return Stack(
+              fit: StackFit.expand,
+              clipBehavior: Clip.hardEdge,
+              children: [
+                Image.memory(
+                  snapshot.data!,
+                  fit: BoxFit.fill,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.high,
+                ),
+                ...decorations.map(
+                  (placement) => CardDecorationOverlay(
+                    placement: placement,
+                    cardWidth: width,
+                    cardHeight: height,
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Dynamic information painted on top of the stored card artwork at runtime.
+/// The values come from the backend and are never baked into the saved image.
+class UserCardInfoOverlay extends StatelessWidget {
+  const UserCardInfoOverlay({
+    super.key,
+    required this.nickname,
+    required this.level,
+    required this.experience,
+    required this.xpRequired,
+    this.loading = false,
+  });
+
+  final String nickname;
+  final int level;
+  final int experience;
+  final int xpRequired;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
     const outline = Color(0xFF4F2B22);
     const mint = Color(0xFFB8EBCB);
     final progress = xpRequired <= 0
         ? 0.0
         : (experience / xpRequired).clamp(0.0, 1.0).toDouble();
 
-    return AspectRatio(
-      aspectRatio: 4 / 3,
-      child: FutureBuilder<Uint8List>(
-        future: _loadArtwork(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return Container(
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFCF6),
-                borderRadius: BorderRadius.circular(28),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        return Stack(
+          fit: StackFit.expand,
+          clipBehavior: Clip.hardEdge,
+          children: [
+            Positioned(
+              left: width * 0.115,
+              top: height * 0.225,
+              width: width * 0.43,
+              height: height * 0.18,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    nickname,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontFamily: 'HSYuji',
+                      fontSize: width * 0.066,
+                      fontWeight: FontWeight.w400,
+                      color: outline,
+                      height: 1,
+                    ),
+                  ),
+                ),
               ),
-              child: const CircularProgressIndicator(strokeWidth: 2.5),
-            );
-          }
-
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
-              final height = constraints.maxHeight;
-
-              return Stack(
-                fit: StackFit.expand,
-                clipBehavior: Clip.hardEdge,
-                children: [
-                  Image.memory(
-                    snapshot.data!,
-                    fit: BoxFit.fill,
-                    gaplessPlayback: true,
-                    filterQuality: FilterQuality.high,
-                  ),
-                  Positioned(
-                    left: width * 0.115,
-                    top: height * 0.225,
-                    width: width * 0.43,
-                    height: height * 0.18,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          nickname,
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontFamily: 'HSYuji',
-                            fontSize: width * 0.066,
-                            fontWeight: FontWeight.w400,
-                            color: outline,
-                            height: 1,
-                          ),
-                        ),
+            ),
+            Positioned(
+              left: width * 0.12,
+              top: height * 0.655,
+              width: width * 0.75,
+              child: loading
+                  ? Text(
+                      '레벨 정보를 불러오는 중...',
+                      style: TextStyle(
+                        fontFamily: 'HSYuji',
+                        fontSize: width * 0.033,
+                        color: outline,
+                      ),
+                    )
+                  : Text(
+                      '레벨 : $level    경험치 : $experience/$xpRequired',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'HSYuji',
+                        fontSize: width * 0.038,
+                        fontWeight: FontWeight.w400,
+                        color: outline,
+                        height: 1,
                       ),
                     ),
-                  ),
-                  Positioned(
-                    left: width * 0.12,
-                    top: height * 0.655,
-                    width: width * 0.75,
-                    child: loading
-                        ? Text(
-                            '레벨 정보를 불러오는 중...',
-                            style: TextStyle(
-                              fontFamily: 'HSYuji',
-                              fontSize: width * 0.033,
-                              color: outline,
-                            ),
-                          )
-                        : Text(
-                            '레벨 : $level    경험치 : $experience/$xpRequired',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: 'HSYuji',
-                              fontSize: width * 0.038,
-                              fontWeight: FontWeight.w400,
-                              color: outline,
-                              height: 1,
-                            ),
-                          ),
-                  ),
-                  if (!loading)
-                    Positioned(
-                      left: width * 0.12,
-                      top: height * 0.75,
-                      width: width * 0.75,
-                      height: height * 0.067,
-                      child: _CardProgressBar(
-                        progress: progress,
-                        fillColor: mint,
-                      ),
-                    ),
-                  ...decorations.map(
-                    (placement) => CardDecorationOverlay(
-                      placement: placement,
-                      cardWidth: width,
-                      cardHeight: height,
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      ),
+            ),
+            if (!loading)
+              Positioned(
+                left: width * 0.12,
+                top: height * 0.75,
+                width: width * 0.75,
+                height: height * 0.067,
+                child: _CardProgressBar(
+                  progress: progress,
+                  fillColor: mint,
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
