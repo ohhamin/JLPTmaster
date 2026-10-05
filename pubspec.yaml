@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_tts: ^4.2.5
+  gal: ^2.3.3
   http: ^1.2.2
   shared_preferences: ^2.3.5
 
@@ -25,6 +26,7 @@ flutter:
     - assets/branding/app_icon.part-01
     - assets/branding/app_icon.part-02
     - assets/cards/
+    - assets/decorations/
     - assets/scenes/meadow_light.webp
     - assets/scenes/cave_dark.webp
   fonts:
