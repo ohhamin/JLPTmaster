@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/feedback_sound_service.dart';
 import '../services/gamification_service.dart';
 import 'card_decoration.dart';
 
@@ -28,9 +29,6 @@ class _AttendanceDialogBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final progress = reward.xpRequired <= 0
-        ? 0.0
-        : (reward.experience / reward.xpRequired).clamp(0.0, 1.0).toDouble();
     final rewardDecorationId = reward.streakRewardDecorationId;
     final rewardDecoration = rewardDecorationId == null
         ? null
@@ -196,13 +194,16 @@ class _AttendanceDialogBody extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              _AttendanceProgressBar(progress: progress),
               const SizedBox(height: 22),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () async {
+                    try {
+                      await FeedbackSoundService.instance.playYes();
+                    } catch (_) {}
+                    if (context.mounted) Navigator.of(context).pop();
+                  },
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -223,42 +224,3 @@ class _AttendanceDialogBody extends StatelessWidget {
   }
 }
 
-class _AttendanceProgressBar extends StatelessWidget {
-  const _AttendanceProgressBar({required this.progress});
-
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    final value = progress.clamp(0.0, 1.0).toDouble();
-    return Container(
-      height: 18,
-      padding: const EdgeInsets.all(2.5),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E9),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: const Color(0xFF6B4636),
-          width: 2,
-        ),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 450),
-                curve: Curves.easeOutCubic,
-                width: constraints.maxWidth * value,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFB8EBCB),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
