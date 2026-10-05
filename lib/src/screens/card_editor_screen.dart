@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 
 import '../services/card_customization_service.dart';
 import '../services/card_image_service.dart';
+import '../services/feedback_sound_service.dart';
 import '../widgets/card_decoration.dart';
 import '../widgets/user_profile_card.dart';
 
@@ -184,6 +185,9 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
         templateId: _templateId,
       );
       await CardImageService.instance.upload(pngBytes);
+      try {
+        await FeedbackSoundService.instance.playYes();
+      } catch (_) {}
       if (!mounted) return;
       Navigator.of(context).pop(saved);
     } catch (error) {
