@@ -45,10 +45,15 @@ jobs:
 
           text = re.sub(r'android:label="[^"]*"', 'android:label="JLPTmaster"', text, count=1)
 
-          internet = '<uses-permission android:name="android.permission.INTERNET" />'
-          if 'android.permission.INTERNET' not in text:
-              text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
-                                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    ' + internet)
+          permissions = [
+              '<uses-permission android:name="android.permission.INTERNET" />',
+              '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />',
+          ]
+          manifest_open = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          for permission in reversed(permissions):
+              permission_name = permission.split('android.permission.', 1)[1].split('"', 1)[0]
+              if f'android.permission.{permission_name}' not in text:
+                  text = text.replace(manifest_open, manifest_open + '\n    ' + permission)
 
           tts_query = '''        <intent>
               <action android:name="android.intent.action.TTS_SERVICE"/>
@@ -62,7 +67,7 @@ jobs:
 
           path.write_text(text)
           PY
-          grep -n 'android:label\|android.permission.INTERNET\|android.intent.action.TTS_SERVICE' android/app/src/main/AndroidManifest.xml
+          grep -n 'android:label\|android.permission.INTERNET\|android.permission.WRITE_EXTERNAL_STORAGE\|android.intent.action.TTS_SERVICE' android/app/src/main/AndroidManifest.xml
 
       - name: Apply transparent launcher icon
         run: |
