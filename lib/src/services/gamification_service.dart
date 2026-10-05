@@ -60,6 +60,7 @@ class ExperienceReward extends LevelingStatus {
     required this.levelsGained,
     required this.leveledUp,
     this.attendanceAwarded = false,
+    this.streakRewardDecorationId,
     super.lastAttendanceDate,
   });
 
@@ -68,25 +69,31 @@ class ExperienceReward extends LevelingStatus {
   final int levelsGained;
   final bool leveledUp;
   final bool attendanceAwarded;
+  final String? streakRewardDecorationId;
 
-  factory ExperienceReward.fromJson(Map<String, dynamic> json) => ExperienceReward(
-        level: (json['level'] as num?)?.toInt() ?? 1,
-        experience: (json['experience'] as num?)?.toInt() ?? 0,
-        xpRequired: (json['xp_required'] as num?)?.toInt() ?? 30,
-        totalExperience: (json['total_experience'] as num?)?.toInt() ?? 0,
-        dailyAttendanceXp: (json['daily_attendance_xp'] as num?)?.toInt() ?? 5,
-        roundCompletionXp: (json['round_completion_xp'] as num?)?.toInt() ?? 30,
-        currentAttendanceStreak:
-            (json['current_attendance_streak'] as num?)?.toInt() ?? 0,
-        maxAttendanceStreak:
-            (json['max_attendance_streak'] as num?)?.toInt() ?? 0,
-        lastAttendanceDate: json['last_attendance_date']?.toString(),
-        xpGained: (json['xp_gained'] as num?)?.toInt() ?? 0,
-        previousLevel: (json['previous_level'] as num?)?.toInt() ?? 1,
-        levelsGained: (json['levels_gained'] as num?)?.toInt() ?? 0,
-        leveledUp: json['leveled_up'] == true,
-        attendanceAwarded: json['attendance_awarded'] == true,
-      );
+  factory ExperienceReward.fromJson(Map<String, dynamic> json) {
+    final rewardId = json['streak_reward_decoration_id']?.toString().trim();
+    return ExperienceReward(
+      level: (json['level'] as num?)?.toInt() ?? 1,
+      experience: (json['experience'] as num?)?.toInt() ?? 0,
+      xpRequired: (json['xp_required'] as num?)?.toInt() ?? 30,
+      totalExperience: (json['total_experience'] as num?)?.toInt() ?? 0,
+      dailyAttendanceXp: (json['daily_attendance_xp'] as num?)?.toInt() ?? 5,
+      roundCompletionXp: (json['round_completion_xp'] as num?)?.toInt() ?? 30,
+      currentAttendanceStreak:
+          (json['current_attendance_streak'] as num?)?.toInt() ?? 0,
+      maxAttendanceStreak:
+          (json['max_attendance_streak'] as num?)?.toInt() ?? 0,
+      lastAttendanceDate: json['last_attendance_date']?.toString(),
+      xpGained: (json['xp_gained'] as num?)?.toInt() ?? 0,
+      previousLevel: (json['previous_level'] as num?)?.toInt() ?? 1,
+      levelsGained: (json['levels_gained'] as num?)?.toInt() ?? 0,
+      leveledUp: json['leveled_up'] == true,
+      attendanceAwarded: json['attendance_awarded'] == true,
+      streakRewardDecorationId:
+          rewardId == null || rewardId.isEmpty || rewardId == 'null' ? null : rewardId,
+    );
+  }
 }
 
 class GamificationService {
