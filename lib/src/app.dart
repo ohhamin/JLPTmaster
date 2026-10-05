@@ -4,12 +4,14 @@ import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/auth_service.dart';
 import 'services/gamification_service.dart';
+import 'services/profile_service.dart';
 import 'services/study_progress_service.dart';
 import 'services/tts_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 import 'widgets/app_scene_background.dart';
 import 'widgets/level_up_dialog.dart';
+import 'widgets/nickname_dialog.dart';
 
 class JlptMasterApp extends StatelessWidget {
   const JlptMasterApp({super.key});
@@ -67,7 +69,7 @@ class _AuthGateState extends State<_AuthGate> {
       _loading = false;
       _authenticated = true;
     });
-    _showAttendanceLevelUp(attendance);
+    _showPostLoginDialogs(attendance);
   }
 
   Future<ExperienceReward?> _prepareUserSession() async {
@@ -80,16 +82,34 @@ class _AuthGateState extends State<_AuthGate> {
     } catch (_) {}
     await ThemeController.syncFromServer();
     try {
+      await ProfileService.instance.refresh();
+    } catch (_) {
+      ProfileService.instance.reset();
+    }
+    try {
       return await GamificationService.instance.claimDailyAttendance();
     } catch (_) {
       return null;
     }
   }
 
-  void _showAttendanceLevelUp(ExperienceReward? reward) {
-    if (reward == null || !reward.leveledUp) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) LevelUpDialog.show(context, reward);
+  void _showPostLoginDialogs(ExperienceReward? reward) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (!ProfileService.instance.hasNickname) {
+        await NicknameDialog.show(
+          context,
+          requiredNickname: true,
+          initialValue: '',
+          onSave: (nickname) async {
+            await ProfileService.instance.updateNickname(nickname);
+          },
+        );
+      }
+      if (!mounted) return;
+      if (reward != null && reward.leveledUp) {
+        await LevelUpDialog.show(context, reward);
+      }
     });
   }
 
@@ -101,12 +121,13 @@ class _AuthGateState extends State<_AuthGate> {
       _loading = false;
       _authenticated = true;
     });
-    _showAttendanceLevelUp(attendance);
+    _showPostLoginDialogs(attendance);
   }
 
   Future<void> _logout() async {
     setState(() => _loading = true);
     await _auth.logout();
+    ProfileService.instance.reset();
     await TtsService.instance.resetForSession();
     if (!mounted) return;
     setState(() {
