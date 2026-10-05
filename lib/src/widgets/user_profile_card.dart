@@ -13,34 +13,64 @@ class UserProfileCard extends StatelessWidget {
     required this.level,
     required this.experience,
     required this.xpRequired,
+    this.templateId = 'chiikawa_basic',
     this.loading = false,
     this.decorations = const [],
+    this.onCharacterTap,
   });
 
   final String nickname;
   final int level;
   final int experience;
   final int xpRequired;
+  final String templateId;
   final bool loading;
   final List<CardDecorationPlacement> decorations;
+  final VoidCallback? onCharacterTap;
 
   @override
   Widget build(BuildContext context) {
     return AspectRatio(
       aspectRatio: 4 / 3,
-      child: Stack(
-        fit: StackFit.expand,
-        clipBehavior: Clip.hardEdge,
-        children: [
-          UserCardArtwork(decorations: decorations),
-          UserCardInfoOverlay(
-            nickname: nickname,
-            level: level,
-            experience: experience,
-            xpRequired: xpRequired,
-            loading: loading,
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          return Stack(
+            fit: StackFit.expand,
+            clipBehavior: Clip.hardEdge,
+            children: [
+              UserCardArtwork(
+                templateId: templateId,
+                decorations: decorations,
+              ),
+              UserCardInfoOverlay(
+                nickname: nickname,
+                level: level,
+                experience: experience,
+                xpRequired: xpRequired,
+                templateId: templateId,
+                loading: loading,
+              ),
+              if (onCharacterTap != null)
+                Positioned(
+                  left: width * 0.565,
+                  top: height * 0.12,
+                  width: width * 0.34,
+                  height: height * 0.48,
+                  child: Semantics(
+                    button: true,
+                    label: '캐릭터 노래 재생',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onCharacterTap,
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -53,19 +83,22 @@ class UserProfileCard extends StatelessWidget {
 class UserCardArtwork extends StatelessWidget {
   const UserCardArtwork({
     super.key,
+    this.templateId = 'chiikawa_basic',
     this.decorations = const [],
   });
 
+  final String templateId;
   final List<CardDecorationPlacement> decorations;
 
-  static const int _artworkPartCount = 14;
-  static Future<Uint8List>? _artworkBytes;
+  static const int _chiikawaArtworkPartCount = 14;
+  static Future<Uint8List>? _chiikawaArtworkBytes;
+  static final Map<String, Future<Uint8List>> _templateCache = {};
 
-  static Future<Uint8List> _loadArtwork() {
-    return _artworkBytes ??= () async {
+  static Future<Uint8List> _loadChiikawaArtwork() {
+    return _chiikawaArtworkBytes ??= () async {
       final parts = await Future.wait(
         List.generate(
-          _artworkPartCount,
+          _chiikawaArtworkPartCount,
           (index) => rootBundle.loadString(
             'assets/cards/default_chiikawa_card.part-${index.toString().padLeft(2, '0')}',
           ),
@@ -75,10 +108,23 @@ class UserCardArtwork extends StatelessWidget {
     }();
   }
 
+  static Future<Uint8List> _loadArtwork(String templateId) {
+    if (templateId == 'chiikawa_basic') return _loadChiikawaArtwork();
+    return _templateCache.putIfAbsent(templateId, () async {
+      final path = switch (templateId) {
+        'hachiware_basic' => 'assets/cards/hachiware_card.webp',
+        'usagi_basic' => 'assets/cards/usagi_card.webp',
+        _ => 'assets/cards/hachiware_card.webp',
+      };
+      final data = await rootBundle.load(path);
+      return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Uint8List>(
-      future: _loadArtwork(),
+      future: _loadArtwork(templateId),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return Container(
@@ -130,6 +176,7 @@ class UserCardInfoOverlay extends StatelessWidget {
     required this.level,
     required this.experience,
     required this.xpRequired,
+    this.templateId = 'chiikawa_basic',
     this.loading = false,
   });
 
@@ -137,12 +184,18 @@ class UserCardInfoOverlay extends StatelessWidget {
   final int level;
   final int experience;
   final int xpRequired;
+  final String templateId;
   final bool loading;
+
+  Color get _progressColor => switch (templateId) {
+        'hachiware_basic' => const Color(0xFFAADAF8),
+        'usagi_basic' => const Color(0xFFD2B4F8),
+        _ => const Color(0xFFB8EBCB),
+      };
 
   @override
   Widget build(BuildContext context) {
     const outline = Color(0xFF4F2B22);
-    const mint = Color(0xFFB8EBCB);
     final progress = xpRequired <= 0
         ? 0.0
         : (experience / xpRequired).clamp(0.0, 1.0).toDouble();
@@ -213,7 +266,7 @@ class UserCardInfoOverlay extends StatelessWidget {
                 height: height * 0.067,
                 child: _CardProgressBar(
                   progress: progress,
-                  fillColor: mint,
+                  fillColor: _progressColor,
                 ),
               ),
           ],
