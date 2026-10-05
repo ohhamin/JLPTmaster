@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 
 import 'api_service.dart';
@@ -18,6 +20,26 @@ const cardTemplateCatalog = <CardTemplateDefinition>[
   CardTemplateDefinition(id: 'chiikawa_basic', label: '치이카와', unlockLevel: 1),
   CardTemplateDefinition(id: 'hachiware_basic', label: '하치와레', unlockLevel: 5),
   CardTemplateDefinition(id: 'usagi_basic', label: '우사기', unlockLevel: 10),
+];
+
+const defaultUnlockedDecorationIds = <String>{
+  'round_glasses',
+  'heart_pair',
+};
+
+const allDecorationIds = <String>[
+  'pink_bow',
+  'red_headband',
+  'blue_headband',
+  'mint_headband',
+  'heart_pair',
+  'heart_bubble',
+  'sparkle',
+  'daisy',
+  'sprout',
+  'halo',
+  'round_glasses',
+  'star_glasses',
 ];
 
 bool isKnownCardTemplate(String id) =>
@@ -87,9 +109,23 @@ class CardCustomizationService {
   static final CardCustomizationService instance = CardCustomizationService._();
 
   final ApiService _api = ApiService();
+  final Random _random = Random();
   final ValueNotifier<List<CardDecorationPlacement>> decorations =
       ValueNotifier<List<CardDecorationPlacement>>(const []);
   final ValueNotifier<String> templateId = ValueNotifier<String>('chiikawa_basic');
+  final ValueNotifier<Set<String>> unlockedDecorationIds =
+      ValueNotifier<Set<String>>(defaultUnlockedDecorationIds);
+
+  Set<String> _parseUnlocked(dynamic raw) {
+    final result = <String>{...defaultUnlockedDecorationIds};
+    if (raw is List) {
+      for (final value in raw) {
+        final id = value.toString();
+        if (allDecorationIds.contains(id)) result.add(id);
+      }
+    }
+    return result;
+  }
 
   Future<List<CardDecorationPlacement>> refresh() async {
     final settings = await _api.fetchSettings();
@@ -101,6 +137,9 @@ class CardCustomizationService {
     templateId.value = isKnownCardTemplate(rawTemplate)
         ? rawTemplate
         : 'chiikawa_basic';
+    unlockedDecorationIds.value = Set.unmodifiable(
+      _parseUnlocked(card['unlocked_decorations']),
+    );
 
     final raw = card['decorations'];
     final parsed = <CardDecorationPlacement>[];
@@ -117,6 +156,27 @@ class CardCustomizationService {
     }
     decorations.value = List.unmodifiable(parsed);
     return decorations.value;
+  }
+
+  Future<List<String>> grantRandomDecorations(int count) async {
+    if (count <= 0) return const [];
+    final settings = await _api.fetchSettings();
+    final card = Map<String, dynamic>.from(
+      settings['card'] as Map? ?? const <String, dynamic>{},
+    );
+    final unlocked = _parseUnlocked(card['unlocked_decorations']);
+    final candidates = allDecorationIds.where((id) => !unlocked.contains(id)).toList()
+      ..shuffle(_random);
+    final granted = candidates.take(count).toList(growable: false);
+    unlocked.addAll(granted);
+    await _api.updateSettings({
+      'card': {
+        ...card,
+        'unlocked_decorations': unlocked.toList()..sort(),
+      },
+    });
+    unlockedDecorationIds.value = Set.unmodifiable(unlocked);
+    return granted;
   }
 
   Future<List<CardDecorationPlacement>> save(
@@ -140,6 +200,7 @@ class CardCustomizationService {
       'card': {
         'template_id': selectedTemplate,
         'decorations': normalized.map((item) => item.toJson()).toList(),
+        'unlocked_decorations': unlockedDecorationIds.value.toList()..sort(),
       },
     });
     this.templateId.value = selectedTemplate;
@@ -147,8 +208,11 @@ class CardCustomizationService {
     return decorations.value;
   }
 
+  bool isDecorationUnlocked(String id) => unlockedDecorationIds.value.contains(id);
+
   void reset() {
     templateId.value = 'chiikawa_basic';
     decorations.value = const [];
+    unlockedDecorationIds.value = defaultUnlockedDecorationIds;
   }
 }
