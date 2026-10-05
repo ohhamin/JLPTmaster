@@ -8,12 +8,46 @@ class TtsVoiceOption {
   const TtsVoiceOption({
     required this.name,
     required this.locale,
+    this.displayIndex = 0,
   });
 
   final String name;
   final String locale;
+  final int displayIndex;
 
-  String get label => name.isEmpty ? locale : '$name · $locale';
+  String get technicalLabel => name.isEmpty ? locale : '$name · $locale';
+
+  String get koreanLabel {
+    final lower = name.toLowerCase();
+    final number = displayIndex > 0 ? ' $displayIndex' : '';
+    if (lower.contains('female') || lower.contains('woman')) {
+      return '일본어 여성 음성$number';
+    }
+    if (lower.contains('male') || lower.contains('man')) {
+      return '일본어 남성 음성$number';
+    }
+    return '일본어 음성$number';
+  }
+
+  String get koreanDescription {
+    final lower = name.toLowerCase();
+    final provider = lower.contains('samsung')
+        ? '삼성 음성 엔진'
+        : lower.contains('google') || lower.contains('wavenet')
+            ? '구글 음성 엔진'
+            : '기기 음성 엔진';
+    final availability = lower.contains('network')
+        ? '인터넷 연결 시 사용'
+        : lower.contains('local')
+            ? '오프라인 사용 가능'
+            : '기기 제공 음성';
+    final quality = lower.contains('wavenet') || lower.contains('neural')
+        ? ' · 고음질'
+        : '';
+    return '$provider · $availability$quality';
+  }
+
+  String get label => koreanLabel;
 }
 
 class TtsSettings {
@@ -124,16 +158,23 @@ class TtsService {
     final voices = await _tts.getVoices;
     if (voices is! List) return const [];
 
-    final result = <TtsVoiceOption>[];
+    final rawOptions = <TtsVoiceOption>[];
     for (final raw in voices) {
       if (raw is! Map) continue;
       final name = raw['name']?.toString() ?? '';
       final locale = raw['locale']?.toString() ?? '';
       if (!locale.toLowerCase().startsWith('ja')) continue;
-      result.add(TtsVoiceOption(name: name, locale: locale));
+      rawOptions.add(TtsVoiceOption(name: name, locale: locale));
     }
-    result.sort((a, b) => a.label.compareTo(b.label));
-    return result;
+    rawOptions.sort((a, b) => a.technicalLabel.compareTo(b.technicalLabel));
+    return [
+      for (var index = 0; index < rawOptions.length; index++)
+        TtsVoiceOption(
+          name: rawOptions[index].name,
+          locale: rawOptions[index].locale,
+          displayIndex: index + 1,
+        ),
+    ];
   }
 
   Future<void> setSpeechRate(double value) async {
