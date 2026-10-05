@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/card_customization_service.dart';
 
@@ -41,8 +44,43 @@ class CardDecorationVisual extends StatelessWidget {
   final String assetId;
   final double size;
 
+  static final Map<String, Future<Uint8List>> _bundledImageCache = {};
+
+  static Future<Uint8List> _loadBundledImage(String assetId) {
+    return _bundledImageCache.putIfAbsent(assetId, () async {
+      final encoded = await rootBundle.loadString(
+        'assets/decorations/$assetId.webp.b64',
+      );
+      return base64Decode(encoded.trim());
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isApprovedGlasses =
+        assetId == 'round_glasses' || assetId == 'star_glasses';
+
+    if (isApprovedGlasses) {
+      return IgnorePointer(
+        child: SizedBox.square(
+          dimension: size,
+          child: FutureBuilder<Uint8List>(
+            future: _loadBundledImage(assetId),
+            builder: (context, snapshot) {
+              final bytes = snapshot.data;
+              if (bytes == null) return const SizedBox.shrink();
+              return Image.memory(
+                bytes,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+                gaplessPlayback: true,
+              );
+            },
+          ),
+        ),
+      );
+    }
+
     return IgnorePointer(
       child: SizedBox.square(
         dimension: size,
@@ -193,19 +231,6 @@ class _DecorationPainter extends CustomPainter {
         fill.color = _cream;
         canvas.drawOval(const Rect.fromLTWH(25, 39, 50, 16), fill);
         break;
-      case 'round_glasses':
-        line.strokeWidth = 6;
-        canvas.drawCircle(const Offset(31, 51), 22, line);
-        canvas.drawCircle(const Offset(69, 51), 22, line);
-        canvas.drawLine(const Offset(53, 48), const Offset(47, 48), line);
-        canvas.drawLine(const Offset(9, 43), const Offset(1, 38), line);
-        canvas.drawLine(const Offset(91, 43), const Offset(99, 38), line);
-        break;
-      case 'star_glasses':
-        _starOutline(canvas, const Offset(29, 50), 25, line);
-        _starOutline(canvas, const Offset(71, 50), 25, line);
-        canvas.drawLine(const Offset(47, 49), const Offset(53, 49), line);
-        break;
       default:
         _spark(canvas, const Offset(50, 50), 34, _yellow, fill, line);
         break;
@@ -312,25 +337,6 @@ class _DecorationPainter extends CustomPainter {
     path.close();
     fill.color = color;
     canvas.drawPath(path, fill);
-    canvas.drawPath(path, line);
-  }
-
-  void _starOutline(Canvas canvas, Offset center, double radius, Paint line) {
-    final path = Path();
-    for (var i = 0; i < 10; i++) {
-      final angle = -math.pi / 2 + i * math.pi / 5;
-      final r = i.isEven ? radius : radius * 0.45;
-      final p = Offset(
-        center.dx + math.cos(angle) * r,
-        center.dy + math.sin(angle) * r,
-      );
-      if (i == 0) {
-        path.moveTo(p.dx, p.dy);
-      } else {
-        path.lineTo(p.dx, p.dy);
-      }
-    }
-    path.close();
     canvas.drawPath(path, line);
   }
 
