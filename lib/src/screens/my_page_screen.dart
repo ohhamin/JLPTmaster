@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../services/card_customization_service.dart';
 import '../services/gamification_service.dart';
 import '../services/profile_service.dart';
 import '../services/session_store.dart';
 import '../widgets/nickname_dialog.dart';
 import '../widgets/user_profile_card.dart';
+import 'card_editor_screen.dart';
 import 'settings_screen.dart';
 
 class MyPageScreen extends StatefulWidget {
@@ -20,6 +22,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
   bool _loading = true;
   bool _loggingOut = false;
   LevelingStatus? _leveling;
+  List<CardDecorationPlacement> _decorations = const [];
 
   @override
   void initState() {
@@ -29,15 +32,20 @@ class _MyPageScreenState extends State<MyPageScreen> {
 
   Future<void> _load() async {
     LevelingStatus? status;
+    List<CardDecorationPlacement>? decorations;
     try {
       status = await GamificationService.instance.fetchStatus();
     } catch (_) {}
     try {
       await ProfileService.instance.refresh();
     } catch (_) {}
+    try {
+      decorations = await CardCustomizationService.instance.refresh();
+    } catch (_) {}
     if (!mounted) return;
     setState(() {
       _leveling = status ?? _leveling;
+      _decorations = decorations ?? _decorations;
       _loading = false;
     });
   }
@@ -45,6 +53,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
   Future<void> _logout() async {
     if (_loggingOut) return;
     setState(() => _loggingOut = true);
+    CardCustomizationService.instance.reset();
     await widget.onLogout();
   }
 
@@ -59,9 +68,23 @@ class _MyPageScreenState extends State<MyPageScreen> {
     );
   }
 
-  void _showCardEditingComingSoon() {
+  Future<void> _openCardEditor(String displayName) async {
+    final status = _leveling;
+    final result = await Navigator.of(context).push<List<CardDecorationPlacement>>(
+      MaterialPageRoute<List<CardDecorationPlacement>>(
+        builder: (context) => CardEditorScreen(
+          nickname: displayName,
+          level: status?.level ?? 1,
+          experience: status?.experience ?? 0,
+          xpRequired: status?.xpRequired ?? 30,
+          initialDecorations: _decorations,
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+    setState(() => _decorations = result);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('카드 꾸미기는 다음 단계에서 연결할게요.')),
+      const SnackBar(content: Text('카드 꾸미기를 저장했어요.')),
     );
   }
 
@@ -109,7 +132,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '내 레벨과 꾸밈 요소가 담길 프로필 카드예요.',
+                          '내 레벨과 꾸밈 요소가 담긴 프로필 카드예요.',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 color: scheme.onSurfaceVariant,
                               ),
@@ -118,7 +141,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                     ),
                   ),
                   FilledButton.tonalIcon(
-                    onPressed: _showCardEditingComingSoon,
+                    onPressed: _loading ? null : () => _openCardEditor(displayName),
                     icon: const Icon(Icons.auto_awesome_rounded, size: 18),
                     label: const Text('꾸미기'),
                   ),
@@ -131,6 +154,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 experience: status?.experience ?? 0,
                 xpRequired: status?.xpRequired ?? 30,
                 loading: _loading,
+                decorations: _decorations,
               ),
               const SizedBox(height: 18),
               _MyPageCard(
