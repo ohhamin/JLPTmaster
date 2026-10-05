@@ -42,10 +42,21 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
   @override
   void initState() {
     super.initState();
-    _items = widget.initialDecorations.take(1).toList(growable: true);
-    _templateId = isKnownCardTemplate(widget.initialTemplateId)
+    _items = widget.initialDecorations
+        .where(
+          (item) => CardCustomizationService.instance.isDecorationUnlocked(item.assetId),
+        )
+        .take(1)
+        .toList(growable: true);
+
+    final requestedTemplate = cardTemplateCatalog.where(
+      (item) => item.id == widget.initialTemplateId,
+    );
+    _templateId = requestedTemplate.isNotEmpty &&
+            widget.level >= requestedTemplate.first.unlockLevel
         ? widget.initialTemplateId
         : 'chiikawa_basic';
+
     if (_items.isNotEmpty) _selectedUid = _items.first.uid;
   }
 
@@ -70,7 +81,13 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
     setState(() => _items[0] = placement);
   }
 
-  void _move(String uid, double dx, double dy, double cardWidth, double cardHeight) {
+  void _move(
+    String uid,
+    double dx,
+    double dy,
+    double cardWidth,
+    double cardHeight,
+  ) {
     if (_items.isEmpty || _items.first.uid != uid) return;
     final current = _items.first;
     setState(() {
@@ -82,10 +99,24 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
   }
 
   void _selectTemplate(CardTemplateDefinition template) {
+    if (widget.level < template.unlockLevel) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${template.label} 카드는 Lv.${template.unlockLevel}부터 사용할 수 있어요.'),
+        ),
+      );
+      return;
+    }
     setState(() => _templateId = template.id);
   }
 
   void _add(CardDecorationDefinition definition) {
+    if (!CardCustomizationService.instance.isDecorationUnlocked(definition.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('아직 해금되지 않은 장식이에요. 레벨업으로 얻을 수 있어요!')),
+      );
+      return;
+    }
     final placement = CardDecorationPlacement(
       uid: '${DateTime.now().microsecondsSinceEpoch}_${definition.id}',
       assetId: definition.id,
@@ -225,7 +256,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
             child: _TemplateChoice(
               template: cardTemplateCatalog[index],
               selected: _templateId == cardTemplateCatalog[index].id,
-              unlocked: true,
+              unlocked: widget.level >= cardTemplateCatalog[index].unlockLevel,
               onTap: () => _selectTemplate(cardTemplateCatalog[index]),
               scheme: scheme,
             ),
@@ -239,7 +270,9 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final selected = _selected;
-    final selectedDefinition = selected == null ? null : _definition(selected.assetId);
+    final selectedDefinition =
+        selected == null ? null : _definition(selected.assetId);
+    final unlockedIds = CardCustomizationService.instance.unlockedDecorationIds.value;
 
     return Scaffold(
       appBar: AppBar(
@@ -267,172 +300,205 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
       body: SafeArea(
         top: false,
         child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
-        child: Column(
-          children: [
-            _templateSelector(scheme),
-            const SizedBox(height: 8),
-            AspectRatio(
-              aspectRatio: 4 / 3,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  RepaintBoundary(
-                    key: _cardCaptureKey,
-                    child: _buildEditableArtwork(scheme),
-                  ),
-                  IgnorePointer(
-                    child: UserCardInfoOverlay(
-                      nickname: widget.nickname,
-                      level: widget.level,
-                      experience: widget.experience,
-                      xpRequired: widget.xpRequired,
-                      templateId: _templateId,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (selected != null) ...[
-              const SizedBox(height: 7),
-              Container(
-                padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: scheme.outlineVariant),
-                ),
-                child: Column(
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
+          child: Column(
+            children: [
+              _templateSelector(scheme),
+              const SizedBox(height: 8),
+              AspectRatio(
+                aspectRatio: 4 / 3,
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            selectedDefinition?.label ?? '선택한 장식',
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: '장식 삭제',
-                          onPressed: _removeSelected,
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.delete_outline_rounded),
-                        ),
-                      ],
+                    RepaintBoundary(
+                      key: _cardCaptureKey,
+                      child: _buildEditableArtwork(scheme),
                     ),
-                    _EditorSlider(
-                      label: '크기',
-                      valueText: '${(selected.scale * 100).round()}%',
-                      value: selected.scale,
-                      min: 0.45,
-                      max: 2.2,
-                      onChanged: (value) => _replace(selected.copyWith(scale: value)),
-                    ),
-                    _EditorSlider(
-                      label: '회전',
-                      valueText: '${selected.rotation.round()}°',
-                      value: selected.rotation.clamp(-180, 180).toDouble(),
-                      min: -180,
-                      max: 180,
-                      onChanged: (value) => _replace(selected.copyWith(rotation: value)),
+                    IgnorePointer(
+                      child: UserCardInfoOverlay(
+                        nickname: widget.nickname,
+                        level: widget.level,
+                        experience: widget.experience,
+                        xpRequired: widget.xpRequired,
+                        templateId: _templateId,
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text(
-                  '장식',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-                const Spacer(),
-                Text(
-                  '${_items.isEmpty ? 0 : 1}/1',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 7),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  const columns = 4;
-                  const gap = 8.0;
-                  final rows = (cardDecorationCatalog.length / columns).ceil();
-                  final tileWidth =
-                      (constraints.maxWidth - gap * (columns - 1)) / columns;
-                  final tileHeight =
-                      (constraints.maxHeight - gap * (rows - 1)) / rows;
-                  final ratio = tileHeight <= 0 ? 1.0 : tileWidth / tileHeight;
-
-                  return GridView.builder(
-                    physics: const NeverScrollableScrollPhysics(),
-                    padding: EdgeInsets.zero,
-                    itemCount: cardDecorationCatalog.length,
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: columns,
-                      mainAxisSpacing: gap,
-                      crossAxisSpacing: gap,
-                      childAspectRatio: ratio,
-                    ),
-                    itemBuilder: (context, index) {
-                      final decoration = cardDecorationCatalog[index];
-                      final selectedAsset =
-                          _items.isNotEmpty && _items.first.assetId == decoration.id;
-                      return InkWell(
-                        onTap: () => _add(decoration),
-                        borderRadius: BorderRadius.circular(14),
-                        child: Container(
-                          padding: const EdgeInsets.fromLTRB(6, 6, 6, 5),
-                          decoration: BoxDecoration(
-                            color: scheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: selectedAsset
-                                  ? scheme.primary
-                                  : scheme.outlineVariant.withValues(alpha: 0.8),
-                              width: selectedAsset ? 2 : 1,
+              if (selected != null) ...[
+                const SizedBox(height: 7),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: scheme.outlineVariant),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              selectedDefinition?.label ?? '선택한 장식',
+                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
                             ),
                           ),
-                          child: Column(
-                            children: [
-                              Expanded(
-                                child: FittedBox(
-                                  child: CardDecorationVisual(
-                                    assetId: decoration.id,
-                                    size: 64,
+                          IconButton(
+                            tooltip: '장식 삭제',
+                            onPressed: _removeSelected,
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.delete_outline_rounded),
+                          ),
+                        ],
+                      ),
+                      _EditorSlider(
+                        label: '크기',
+                        valueText: '${(selected.scale * 100).round()}%',
+                        value: selected.scale,
+                        min: 0.45,
+                        max: 2.2,
+                        onChanged: (value) =>
+                            _replace(selected.copyWith(scale: value)),
+                      ),
+                      _EditorSlider(
+                        label: '회전',
+                        valueText: '${selected.rotation.round()}°',
+                        value: selected.rotation.clamp(-180, 180).toDouble(),
+                        min: -180,
+                        max: 180,
+                        onChanged: (value) =>
+                            _replace(selected.copyWith(rotation: value)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    '장식',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${unlockedIds.length}/${cardDecorationCatalog.length} 해금',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 7),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const columns = 4;
+                    const gap = 8.0;
+                    final rows =
+                        (cardDecorationCatalog.length / columns).ceil();
+                    final tileWidth =
+                        (constraints.maxWidth - gap * (columns - 1)) / columns;
+                    final tileHeight =
+                        (constraints.maxHeight - gap * (rows - 1)) / rows;
+                    final ratio = tileHeight <= 0 ? 1.0 : tileWidth / tileHeight;
+
+                    return GridView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: cardDecorationCatalog.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        mainAxisSpacing: gap,
+                        crossAxisSpacing: gap,
+                        childAspectRatio: ratio,
+                      ),
+                      itemBuilder: (context, index) {
+                        final decoration = cardDecorationCatalog[index];
+                        final unlocked = unlockedIds.contains(decoration.id);
+                        final selectedAsset = _items.isNotEmpty &&
+                            _items.first.assetId == decoration.id;
+                        return InkWell(
+                          onTap: unlocked ? () => _add(decoration) : null,
+                          borderRadius: BorderRadius.circular(14),
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(6, 6, 6, 5),
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: selectedAsset
+                                    ? scheme.primary
+                                    : scheme.outlineVariant
+                                        .withValues(alpha: 0.8),
+                                width: selectedAsset ? 2 : 1,
+                              ),
+                            ),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Opacity(
+                                  opacity: unlocked ? 1 : 0.32,
+                                  child: Column(
+                                    children: [
+                                      Expanded(
+                                        child: FittedBox(
+                                          child: CardDecorationVisual(
+                                            assetId: decoration.id,
+                                            size: 64,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        decoration.label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                decoration.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      fontWeight: FontWeight.w800,
+                                if (!unlocked)
+                                  Center(
+                                    child: Container(
+                                      width: 30,
+                                      height: 30,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: scheme.surface.withValues(alpha: 0.88),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.lock_rounded,
+                                        size: 17,
+                                        color: scheme.onSurfaceVariant,
+                                      ),
                                     ),
-                              ),
-                            ],
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  );
-                },
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );
@@ -478,17 +544,25 @@ class _TemplateChoice extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (!unlocked) ...[
-                Icon(Icons.lock_rounded, size: 13, color: scheme.onSurfaceVariant),
+                Icon(
+                  Icons.lock_rounded,
+                  size: 13,
+                  color: scheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 3),
               ],
               Flexible(
                 child: Text(
-                  unlocked ? template.label : '${template.label} · Lv.${template.unlockLevel}',
+                  unlocked
+                      ? template.label
+                      : '${template.label} · Lv.${template.unlockLevel}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         fontWeight: FontWeight.w900,
-                        color: unlocked ? scheme.onSurface : scheme.onSurfaceVariant,
+                        color: unlocked
+                            ? scheme.onSurface
+                            : scheme.onSurfaceVariant,
                       ),
                 ),
               ),
