@@ -54,10 +54,10 @@ class AppTheme {
         centerTitle: false,
         titleTextStyle: TextStyle(
           color: scheme.onSurface,
-          fontFamily: AppTypography.uiFontFamily,
-          fontSize: 20,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -0.35,
+          fontFamily: 'HSYuji',
+          fontSize: 23,
+          fontWeight: FontWeight.w400,
+          letterSpacing: -0.2,
         ),
       ),
       cardTheme: CardThemeData(
