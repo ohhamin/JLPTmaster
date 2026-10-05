@@ -144,9 +144,12 @@ class _ChapterScreenState extends State<ChapterScreen> {
             for (var index = 0; index < chapters.length; index += 6) {
               groups.add(chapters.sublist(index, math.min(index + 6, chapters.length)));
             }
-            // ChapterSummary.total is cumulative for this level (50, 100, ...),
-            // so the final chapter already represents the level-wide word count.
-            final totalWords = chapters.last.total;
+            // Each SET restarts its cumulative chapter total, so derive the
+            // level-wide count from the last chapter of every 6-chapter SET.
+            final totalWords = groups.fold<int>(
+              0,
+              (sum, group) => sum + group.last.total,
+            );
 
             return ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
