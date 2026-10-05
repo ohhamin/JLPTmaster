@@ -82,12 +82,6 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
   }
 
   void _selectTemplate(CardTemplateDefinition template) {
-    if (widget.level < template.unlockLevel) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lv.${template.unlockLevel}부터 ${template.label} 카드를 사용할 수 있어요.')),
-      );
-      return;
-    }
     setState(() => _templateId = template.id);
   }
 
@@ -231,7 +225,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
             child: _TemplateChoice(
               template: cardTemplateCatalog[index],
               selected: _templateId == cardTemplateCatalog[index].id,
-              unlocked: widget.level >= cardTemplateCatalog[index].unlockLevel,
+              unlocked: true,
               onTap: () => _selectTemplate(cardTemplateCatalog[index]),
               scheme: scheme,
             ),
@@ -270,8 +264,10 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
           const SizedBox(width: 12),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
+      body: SafeArea(
+        top: false,
+        child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
         child: Column(
           children: [
             _templateSelector(scheme),
@@ -436,6 +432,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
