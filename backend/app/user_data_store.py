@@ -2,9 +2,40 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import threading
 from pathlib import Path
 from typing import Any
+
+
+CARD_DECORATION_IDS = tuple(str(index) for index in range(1, 40))
+DEFAULT_CARD_DECORATION_IDS = ('1', '2', '3')
+LEGACY_DECORATION_ID_MAP = {
+    'pink_bow': '1',
+    'red_headband': '2',
+    'blue_headband': '3',
+    'mint_headband': '4',
+    'heart_pair': '5',
+    'heart_bubble': '6',
+    'sparkle': '7',
+    'daisy': '8',
+    'sprout': '9',
+    'halo': '10',
+    'round_glasses': '11',
+    'star_glasses': '12',
+}
+
+
+def _normalize_decoration_id(raw: object) -> str:
+    value = str(raw or '').strip()
+    return LEGACY_DECORATION_ID_MAP.get(value, value)
+
+
+def _decoration_sort_key(value: str) -> tuple[int, str]:
+    try:
+        return int(value), value
+    except (TypeError, ValueError):
+        return 9999, value
 
 
 class UserDataStore:
@@ -42,6 +73,41 @@ class UserDataStore:
     def _path(self, user_id: str, name: str) -> Path:
         return self._dir(user_id) / name
 
+    @staticmethod
+    def _normalize_card_settings(settings: dict) -> tuple[dict, bool]:
+        before = json.dumps(settings, ensure_ascii=False, sort_keys=True)
+        result = dict(settings)
+        raw_card = result.get('card')
+        card = dict(raw_card) if isinstance(raw_card, dict) else {}
+
+        owned = set(DEFAULT_CARD_DECORATION_IDS)
+        raw_owned = card.get('unlocked_decorations')
+        if isinstance(raw_owned, list):
+            for raw_id in raw_owned:
+                decoration_id = _normalize_decoration_id(raw_id)
+                if decoration_id in CARD_DECORATION_IDS:
+                    owned.add(decoration_id)
+
+        placements = card.get('decorations')
+        if isinstance(placements, list):
+            normalized_placements: list[dict] = []
+            for raw_placement in placements:
+                if not isinstance(raw_placement, dict):
+                    continue
+                placement = dict(raw_placement)
+                decoration_id = _normalize_decoration_id(placement.get('asset_id'))
+                if decoration_id not in CARD_DECORATION_IDS:
+                    continue
+                placement['asset_id'] = decoration_id
+                owned.add(decoration_id)
+                normalized_placements.append(placement)
+            card['decorations'] = normalized_placements
+
+        card['unlocked_decorations'] = sorted(owned, key=_decoration_sort_key)
+        result['card'] = card
+        after = json.dumps(result, ensure_ascii=False, sort_keys=True)
+        return result, before != after
+
     def ensure_user(self, user: dict) -> None:
         with self._lock:
             directory = self._dir(str(user['id']))
@@ -55,13 +121,23 @@ class UserDataStore:
                 'known.json': {'chapters': {}, 'final': {}},
                 'favorites.json': {'word_ids': []},
                 'rounds.json': {},
-                'settings.json': {},
+                'settings.json': {
+                    'card': {
+                        'unlocked_decorations': list(DEFAULT_CARD_DECORATION_IDS),
+                    },
+                },
                 'stats.json': {},
             }
             for name, value in defaults.items():
                 path = directory / name
                 if not path.exists():
                     self._write_json(path, value)
+
+            settings_path = directory / 'settings.json'
+            settings = self._read_json(settings_path, defaults['settings.json'])
+            normalized, changed = self._normalize_card_settings(settings)
+            if changed:
+                self._write_json(settings_path, normalized)
 
     @staticmethod
     def _chapter_key(level: str, chapter: int) -> str:
@@ -209,7 +285,12 @@ class UserDataStore:
 
     def settings(self, user_id: str) -> dict:
         with self._lock:
-            return self._read_json(self._path(user_id, 'settings.json'), {})
+            path = self._path(user_id, 'settings.json')
+            current = self._read_json(path, {})
+            normalized, changed = self._normalize_card_settings(current)
+            if changed:
+                self._write_json(path, normalized)
+            return normalized
 
     def update_settings(self, user_id: str, changes: dict) -> dict:
         def merge(target: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
@@ -224,8 +305,56 @@ class UserDataStore:
             path = self._path(user_id, 'settings.json')
             current = self._read_json(path, {})
             merged = merge(dict(current), changes)
-            self._write_json(path, merged)
-            return merged
+            normalized, _ = self._normalize_card_settings(merged)
+            self._write_json(path, normalized)
+            return normalized
+
+    def owned_card_decoration_ids(self, user_id: str) -> set[str]:
+        settings = self.settings(user_id)
+        card = settings.get('card') or {}
+        return {
+            str(value)
+            for value in (card.get('unlocked_decorations') or [])
+            if str(value) in CARD_DECORATION_IDS
+        }
+
+    def set_card_decoration_ids(self, user_id: str, decoration_ids: list[str] | tuple[str, ...] | set[str]) -> list[str]:
+        with self._lock:
+            path = self._path(user_id, 'settings.json')
+            settings = self._read_json(path, {})
+            normalized, _ = self._normalize_card_settings(settings)
+            card = dict(normalized.get('card') or {})
+            owned = set(DEFAULT_CARD_DECORATION_IDS)
+            for raw_id in decoration_ids:
+                decoration_id = _normalize_decoration_id(raw_id)
+                if decoration_id in CARD_DECORATION_IDS:
+                    owned.add(decoration_id)
+            card['unlocked_decorations'] = sorted(owned, key=_decoration_sort_key)
+            normalized['card'] = card
+            self._write_json(path, normalized)
+            return list(card['unlocked_decorations'])
+
+    def grant_random_card_decoration(self, user_id: str) -> str | None:
+        with self._lock:
+            path = self._path(user_id, 'settings.json')
+            settings = self._read_json(path, {})
+            normalized, _ = self._normalize_card_settings(settings)
+            card = dict(normalized.get('card') or {})
+            owned = {
+                str(value)
+                for value in (card.get('unlocked_decorations') or [])
+                if str(value) in CARD_DECORATION_IDS
+            }
+            candidates = [item for item in CARD_DECORATION_IDS if item not in owned]
+            if not candidates:
+                self._write_json(path, normalized)
+                return None
+            granted = secrets.choice(candidates)
+            owned.add(granted)
+            card['unlocked_decorations'] = sorted(owned, key=_decoration_sort_key)
+            normalized['card'] = card
+            self._write_json(path, normalized)
+            return granted
 
     def migrate_legacy_progress(self, user_id: str, legacy_path: str) -> bool:
         """Assign the old single-user progress.json to the first account once."""
