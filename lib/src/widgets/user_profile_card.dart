@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/card_customization_service.dart';
+import 'card_decoration.dart';
+
 class UserProfileCard extends StatelessWidget {
   const UserProfileCard({
     super.key,
@@ -11,6 +14,7 @@ class UserProfileCard extends StatelessWidget {
     required this.experience,
     required this.xpRequired,
     this.loading = false,
+    this.decorations = const [],
   });
 
   final String nickname;
@@ -18,6 +22,7 @@ class UserProfileCard extends StatelessWidget {
   final int experience;
   final int xpRequired;
   final bool loading;
+  final List<CardDecorationPlacement> decorations;
 
   static const int _artworkPartCount = 14;
   static Future<Uint8List>? _artworkBytes;
@@ -67,6 +72,7 @@ class UserProfileCard extends StatelessWidget {
 
               return Stack(
                 fit: StackFit.expand,
+                clipBehavior: Clip.hardEdge,
                 children: [
                   Image.memory(
                     snapshot.data!,
@@ -135,6 +141,13 @@ class UserProfileCard extends StatelessWidget {
                         fillColor: mint,
                       ),
                     ),
+                  ...decorations.map(
+                    (placement) => CardDecorationOverlay(
+                      placement: placement,
+                      cardWidth: width,
+                      cardHeight: height,
+                    ),
+                  ),
                 ],
               );
             },
