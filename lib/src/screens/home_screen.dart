@@ -17,6 +17,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
+  int _myPageRefreshKey = 0;
 
   static const _titles = ['JLPTmaster', '즐겨찾기', '마이페이지'];
 
@@ -42,7 +43,10 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const LevelHomeScreen(),
             const FavoritesScreen(),
-            MyPageScreen(onLogout: widget.onLogout),
+            MyPageScreen(
+              key: ValueKey(_myPageRefreshKey),
+              onLogout: widget.onLogout,
+            ),
           ],
         ),
         bottomNavigationBar: DecoratedBox(
@@ -66,7 +70,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? const Color(0xF218222E)
                     : const Color(0xF8FFFEF8),
                 selectedIndex: _index,
-                onDestinationSelected: (index) => setState(() => _index = index),
+                onDestinationSelected: (index) {
+                  setState(() {
+                    _index = index;
+                    if (index == 2) _myPageRefreshKey++;
+                  });
+                },
                 destinations: const [
                   NavigationDestination(
                     icon: Icon(Icons.menu_book_outlined),
