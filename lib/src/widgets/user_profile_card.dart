@@ -120,7 +120,7 @@ class UserCardArtwork extends StatelessWidget {
       'usagi_basic' => _loadPartedArtwork(
           'usagi_basic',
           'usagi_card',
-          3,
+          5,
         ),
       _ => _loadPartedArtwork(
           'chiikawa_basic',
