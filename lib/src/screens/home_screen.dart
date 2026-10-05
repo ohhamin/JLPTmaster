@@ -23,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AppSceneBackground(
       child: Scaffold(
@@ -31,10 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
         appBar: AppBar(
           centerTitle: true,
           backgroundColor: Colors.transparent,
-          title: Text(
-            _titles[_index],
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
+          title: Text(_titles[_index]),
           actions: const [
             ThemeToggleButton(),
             SizedBox(width: 10),
@@ -48,34 +46,48 @@ class _HomeScreenState extends State<HomeScreen> {
             MyPageScreen(onLogout: widget.onLogout),
           ],
         ),
-        bottomNavigationBar: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(
-                color: scheme.outlineVariant.withValues(alpha: 0.72),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.14),
+                  blurRadius: 22,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: NavigationBar(
+                height: 72,
+                backgroundColor: isDark
+                    ? const Color(0xF218222E)
+                    : const Color(0xF8FFFEF8),
+                selectedIndex: _index,
+                onDestinationSelected: (index) => setState(() => _index = index),
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.menu_book_outlined),
+                    selectedIcon: Icon(Icons.menu_book_rounded),
+                    label: '학습',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.star_border_rounded),
+                    selectedIcon: Icon(Icons.star_rounded),
+                    label: '즐겨찾기',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.person_outline_rounded),
+                    selectedIcon: Icon(Icons.person_rounded),
+                    label: '마이페이지',
+                  ),
+                ],
               ),
             ),
-          ),
-          child: NavigationBar(
-            selectedIndex: _index,
-            onDestinationSelected: (index) => setState(() => _index = index),
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.menu_book_outlined),
-                selectedIcon: Icon(Icons.menu_book_rounded),
-                label: '학습',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.star_border_rounded),
-                selectedIcon: Icon(Icons.star_rounded),
-                label: '즐겨찾기',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.person_outline_rounded),
-                selectedIcon: Icon(Icons.person_rounded),
-                label: '마이페이지',
-              ),
-            ],
           ),
         ),
       ),
