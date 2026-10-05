@@ -58,7 +58,7 @@ const cardDecorationCatalog = <CardDecorationDefinition>[
   CardDecorationDefinition(id: '37', label: '하트 머리핀'),
   CardDecorationDefinition(id: '38', label: '구름 머리핀'),
   CardDecorationDefinition(id: '39', label: '딸기 머리핀'),
-]
+];
 
 CardDecorationDefinition? cardDecorationById(String rawId) {
   final id = normalizeDecorationId(rawId);
