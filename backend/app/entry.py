@@ -49,10 +49,12 @@ def get_card_image(user: dict = Depends(current_user)) -> FileResponse:
     path = card_images.ensure_default(user_id)
     if path is None or not path.is_file():
         raise HTTPException(status_code=404, detail='card image not found')
+    media_type = card_images.media_type(user_id)
+    extension = '.webp' if media_type == 'image/webp' else '.png'
     return FileResponse(
         path,
-        media_type='image/png',
-        filename=f'{user_id}.png',
+        media_type=media_type,
+        filename=f'{user_id}{extension}',
         headers={'Cache-Control': 'no-store, max-age=0'},
     )
 
