@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:gal/gal.dart';
 
 import '../services/card_customization_service.dart';
+import '../services/card_song_service.dart';
 import '../services/gamification_service.dart';
 import '../services/profile_service.dart';
 import '../services/session_store.dart';
@@ -29,6 +30,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
   bool _downloading = false;
   LevelingStatus? _leveling;
   List<CardDecorationPlacement> _decorations = const [];
+  String _templateId = 'chiikawa_basic';
 
   @override
   void initState() {
@@ -52,6 +54,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
     setState(() {
       _leveling = status ?? _leveling;
       _decorations = decorations ?? _decorations;
+      _templateId = CardCustomizationService.instance.templateId.value;
       _loading = false;
     });
   }
@@ -59,6 +62,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
   Future<void> _logout() async {
     if (_loggingOut) return;
     setState(() => _loggingOut = true);
+    await CardSongService.instance.stop();
     CardCustomizationService.instance.reset();
     await widget.onLogout();
   }
@@ -85,15 +89,30 @@ class _MyPageScreenState extends State<MyPageScreen> {
           level: status?.level ?? 1,
           experience: status?.experience ?? 0,
           xpRequired: status?.xpRequired ?? 30,
+          initialTemplateId: _templateId,
           initialDecorations: _decorations,
         ),
       ),
     );
     if (!mounted || result == null) return;
-    setState(() => _decorations = result);
+    setState(() {
+      _decorations = result;
+      _templateId = CardCustomizationService.instance.templateId.value;
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('카드 꾸미기를 저장했어요.')),
     );
+  }
+
+  Future<void> _playCardSong() async {
+    try {
+      await CardSongService.instance.play(_templateId);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('노래를 재생하지 못했어요. $error')),
+      );
+    }
   }
 
   Future<void> _downloadCard() async {
@@ -211,8 +230,10 @@ class _MyPageScreenState extends State<MyPageScreen> {
                   level: status?.level ?? 1,
                   experience: status?.experience ?? 0,
                   xpRequired: status?.xpRequired ?? 30,
+                  templateId: _templateId,
                   loading: _loading,
                   decorations: _decorations,
+                  onCharacterTap: _loading ? null : _playCardSong,
                 ),
               ),
               const SizedBox(height: 18),
