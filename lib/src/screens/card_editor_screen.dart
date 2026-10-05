@@ -59,6 +59,18 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
     setState(() => _items[index] = placement);
   }
 
+  void _move(String uid, double dx, double dy, double cardWidth, double cardHeight) {
+    final index = _items.indexWhere((item) => item.uid == uid);
+    if (index < 0) return;
+    final current = _items[index];
+    setState(() {
+      _items[index] = current.copyWith(
+        x: (current.x + dx / cardWidth).clamp(0.02, 0.98).toDouble(),
+        y: (current.y + dy / cardHeight).clamp(0.02, 0.98).toDouble(),
+      );
+    });
+  }
+
   void _add(CardDecorationDefinition definition) {
     if (_items.length >= 24) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,8 +82,8 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
     final placement = CardDecorationPlacement(
       uid: '${DateTime.now().microsecondsSinceEpoch}_${definition.id}',
       assetId: definition.id,
-      x: (0.76 + (count % 3) * 0.035).clamp(0.08, 0.92),
-      y: (0.27 + (count % 4) * 0.03).clamp(0.08, 0.90),
+      x: (0.76 + (count % 3) * 0.035).clamp(0.08, 0.92).toDouble(),
+      y: (0.27 + (count % 4) * 0.03).clamp(0.08, 0.90).toDouble(),
     );
     setState(() {
       _items.add(placement);
@@ -167,7 +179,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                     final cardWidth = constraints.maxWidth;
                     final cardHeight = constraints.maxHeight;
                     return Stack(
-                      clipBehavior: Clip.none,
+                      clipBehavior: Clip.hardEdge,
                       children: _items.map((item) {
                         final baseSize = cardWidth * 0.16;
                         final size = baseSize * item.scale;
@@ -181,16 +193,13 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                             behavior: HitTestBehavior.translucent,
                             onTap: () => setState(() => _selectedUid = item.uid),
                             onPanStart: (_) => setState(() => _selectedUid = item.uid),
-                            onPanUpdate: (details) {
-                              _replace(
-                                item.copyWith(
-                                  x: (item.x + details.delta.dx / cardWidth)
-                                      .clamp(0.02, 0.98),
-                                  y: (item.y + details.delta.dy / cardHeight)
-                                      .clamp(0.02, 0.98),
-                                ),
-                              );
-                            },
+                            onPanUpdate: (details) => _move(
+                              item.uid,
+                              details.delta.dx,
+                              details.delta.dy,
+                              cardWidth,
+                              cardHeight,
+                            ),
                             child: Transform.rotate(
                               angle: item.rotation * math.pi / 180,
                               child: DecoratedBox(
@@ -260,7 +269,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                   _EditorSlider(
                     label: '회전',
                     valueText: '${selected.rotation.round()}°',
-                    value: selected.rotation.clamp(-180, 180),
+                    value: selected.rotation.clamp(-180, 180).toDouble(),
                     min: -180,
                     max: 180,
                     onChanged: (value) => _replace(selected.copyWith(rotation: value)),
@@ -384,7 +393,7 @@ class _EditorSlider extends StatelessWidget {
         ),
         Expanded(
           child: Slider(
-            value: value.clamp(min, max),
+            value: value.clamp(min, max).toDouble(),
             min: min,
             max: max,
             onChanged: onChanged,
