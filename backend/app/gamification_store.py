@@ -44,6 +44,8 @@ class GamificationStore:
             'experience': 0,
             'total_experience': 0,
             'last_attendance_date': None,
+            'current_attendance_streak': 0,
+            'max_attendance_streak': 0,
             'rewarded_rounds': [],
         }
 
@@ -64,6 +66,19 @@ class GamificationStore:
         data['level'] = max(1, int(data.get('level') or 1))
         data['experience'] = max(0, int(data.get('experience') or 0))
         data['total_experience'] = max(0, int(data.get('total_experience') or 0))
+        data['current_attendance_streak'] = max(
+            0,
+            int(data.get('current_attendance_streak') or 0),
+        )
+        data['max_attendance_streak'] = max(
+            data['current_attendance_streak'],
+            int(data.get('max_attendance_streak') or 0),
+        )
+        # Existing users may already have an attendance date from before streak
+        # tracking was introduced. Preserve that day as a one-day streak.
+        if data.get('last_attendance_date') and data['current_attendance_streak'] == 0:
+            data['current_attendance_streak'] = 1
+            data['max_attendance_streak'] = max(data['max_attendance_streak'], 1)
         data['rewarded_rounds'] = [str(item) for item in (data.get('rewarded_rounds') or [])]
         return data
 
@@ -74,6 +89,8 @@ class GamificationStore:
             'xp_required': self.xp_per_level,
             'total_experience': int(data.get('total_experience') or 0),
             'last_attendance_date': data.get('last_attendance_date'),
+            'current_attendance_streak': int(data.get('current_attendance_streak') or 0),
+            'max_attendance_streak': int(data.get('max_attendance_streak') or 0),
             'daily_attendance_xp': self.daily_xp,
             'round_completion_xp': self.round_xp,
         }
@@ -104,7 +121,8 @@ class GamificationStore:
         with self._lock:
             data = self._load(user_id)
             tz = timezone(timedelta(hours=self.timezone_offset_hours))
-            today = datetime.now(tz).date().isoformat()
+            today_date = datetime.now(tz).date()
+            today = today_date.isoformat()
             if data.get('last_attendance_date') == today:
                 return {
                     **self._status(data),
@@ -114,7 +132,29 @@ class GamificationStore:
                     'leveled_up': False,
                     'attendance_awarded': False,
                 }
+
+            previous_date = None
+            previous_date_raw = data.get('last_attendance_date')
+            if previous_date_raw:
+                try:
+                    previous_date = datetime.strptime(
+                        str(previous_date_raw),
+                        '%Y-%m-%d',
+                    ).date()
+                except ValueError:
+                    previous_date = None
+
+            if previous_date == today_date - timedelta(days=1):
+                current_streak = int(data.get('current_attendance_streak') or 0) + 1
+            else:
+                current_streak = 1
+
             data['last_attendance_date'] = today
+            data['current_attendance_streak'] = current_streak
+            data['max_attendance_streak'] = max(
+                int(data.get('max_attendance_streak') or 0),
+                current_streak,
+            )
             reward = self._award_locked(data, self.daily_xp)
             self._write_json(self._path(user_id), data)
             return {**reward, 'attendance_awarded': True}
