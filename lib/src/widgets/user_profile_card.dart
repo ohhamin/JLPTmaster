@@ -1,7 +1,4 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../services/card_customization_service.dart';
 import 'card_decoration.dart';
@@ -13,6 +10,7 @@ class UserProfileCard extends StatelessWidget {
     required this.level,
     required this.experience,
     required this.xpRequired,
+    this.currentAttendanceStreak = 0,
     this.templateId = 'chiikawa_basic',
     this.loading = false,
     this.decorations = const [],
@@ -23,6 +21,7 @@ class UserProfileCard extends StatelessWidget {
   final int level;
   final int experience;
   final int xpRequired;
+  final int currentAttendanceStreak;
   final String templateId;
   final bool loading;
   final List<CardDecorationPlacement> decorations;
@@ -49,6 +48,7 @@ class UserProfileCard extends StatelessWidget {
                 level: level,
                 experience: experience,
                 xpRequired: xpRequired,
+                currentAttendanceStreak: currentAttendanceStreak,
                 templateId: templateId,
                 loading: loading,
               ),
@@ -86,100 +86,37 @@ class UserCardArtwork extends StatelessWidget {
   final String templateId;
   final List<CardDecorationPlacement> decorations;
 
-  static final Map<String, Future<Uint8List>> _templateCache = {};
-
-  static Future<Uint8List> _loadPartedArtwork(
-    String cacheKey,
-    String filePrefix,
-    int partCount,
-  ) {
-    return _templateCache.putIfAbsent(cacheKey, () async {
-      final parts = await Future.wait(
-        List.generate(
-          partCount,
-          (index) => rootBundle.loadString(
-            'assets/cards/$filePrefix.part-${index.toString().padLeft(2, '0')}',
-            cache: false,
-          ),
-        ),
-      );
-      return base64Decode(parts.join());
-    });
-  }
-
-  static Future<Uint8List> _loadBase64Artwork(
-    String cacheKey,
-    String assetPath,
-  ) {
-    return _templateCache.putIfAbsent(cacheKey, () async {
-      final encoded = await rootBundle.loadString(assetPath, cache: false);
-      return base64Decode(encoded.trim());
-    });
-  }
-
-  static Future<Uint8List> _loadArtwork(String templateId) {
-    return switch (templateId) {
-      'hachiware_basic' => _loadBase64Artwork(
-          'hachiware_user_card',
-          'assets/cards/hachiware_user.webp.b64',
-        ),
-      'usagi_basic' => _loadPartedArtwork(
-          'usagi_basic',
-          'usagi_card',
-          5,
-        ),
-      _ => _loadPartedArtwork(
-          'chiikawa_basic',
-          'default_chiikawa_card',
-          14,
-        ),
-    };
-  }
+  String get _assetPath => switch (templateId) {
+        'hachiware_basic' => 'assets/cards/hachiware.png',
+        'usagi_basic' => 'assets/cards/usagi.png',
+        _ => 'assets/cards/chiikawa.png',
+      };
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List>(
-      key: ValueKey(templateId),
-      future: _loadArtwork(templateId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return Container(
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFFCF6),
-              borderRadius: BorderRadius.circular(28),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        return Stack(
+          fit: StackFit.expand,
+          clipBehavior: Clip.hardEdge,
+          children: [
+            Image.asset(
+              _assetPath,
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, __, ___) => const SizedBox.expand(),
             ),
-            child: const CircularProgressIndicator(strokeWidth: 2.5),
-          );
-        }
-
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final height = constraints.maxHeight;
-            return Stack(
-              fit: StackFit.expand,
-              clipBehavior: Clip.hardEdge,
-              children: [
-                Image.memory(
-                  snapshot.data!,
-                  fit: BoxFit.fill,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.high,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: const Color(0xFFFFFCF6),
-                  ),
-                ),
-                ...decorations.map(
-                  (placement) => CardDecorationOverlay(
-                    placement: placement,
-                    cardWidth: width,
-                    cardHeight: height,
-                  ),
-                ),
-              ],
-            );
-          },
+            ...decorations.map(
+              (placement) => CardDecorationOverlay(
+                placement: placement,
+                cardWidth: width,
+                cardHeight: height,
+              ),
+            ),
+          ],
         );
       },
     );
@@ -193,6 +130,7 @@ class UserCardInfoOverlay extends StatelessWidget {
     required this.level,
     required this.experience,
     required this.xpRequired,
+    this.currentAttendanceStreak = 0,
     this.templateId = 'chiikawa_basic',
     this.loading = false,
   });
@@ -201,6 +139,7 @@ class UserCardInfoOverlay extends StatelessWidget {
   final int level;
   final int experience;
   final int xpRequired;
+  final int currentAttendanceStreak;
   final String templateId;
   final bool loading;
 
@@ -262,16 +201,19 @@ class UserCardInfoOverlay extends StatelessWidget {
                         color: outline,
                       ),
                     )
-                  : Text(
-                      '레벨 : $level    경험치 : $experience/$xpRequired',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: 'HSYuji',
-                        fontSize: width * 0.038,
-                        fontWeight: FontWeight.w400,
-                        color: outline,
-                        height: 1,
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '레벨 : $level    경험치 : $experience/$xpRequired    연속출석일 : $currentAttendanceStreak',
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontFamily: 'HSYuji',
+                          fontSize: width * 0.038,
+                          fontWeight: FontWeight.w400,
+                          color: outline,
+                          height: 1,
+                        ),
                       ),
                     ),
             ),
@@ -324,12 +266,6 @@ class _CardProgressBar extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final filledWidth = constraints.maxWidth * value;
-          final markerLeft = filledWidth <= 18
-              ? 2.0
-              : filledWidth >= constraints.maxWidth - 15
-                  ? constraints.maxWidth - 17
-                  : filledWidth - 15;
-
           return Stack(
             clipBehavior: Clip.none,
             children: [
@@ -358,19 +294,6 @@ class _CardProgressBar extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.58),
                       borderRadius: BorderRadius.circular(99),
                     ),
-                  ),
-                ),
-              if (value > 0)
-                Positioned(
-                  left: markerLeft,
-                  top: -5,
-                  child: const Icon(
-                    Icons.auto_awesome_rounded,
-                    size: 18,
-                    color: Color(0xFFFFCF55),
-                    shadows: [
-                      Shadow(color: outline, blurRadius: 0.6),
-                    ],
                   ),
                 ),
             ],
