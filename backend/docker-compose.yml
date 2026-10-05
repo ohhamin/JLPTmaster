@@ -1,6 +1,8 @@
 services:
   api:
-    build: .
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
     container_name: jlptmaster-api
     restart: unless-stopped
     ports:
@@ -11,6 +13,8 @@ services:
       USERS_JSON_PATH: /app/data/users.json
       SESSIONS_JSON_PATH: /app/data/sessions.json
       USER_DATA_ROOT: /app/data/user_data
+      CARD_IMAGE_ROOT: /app/data/cards
+      DEFAULT_CARD_ASSET_ROOT: /app/card_assets
       LEVEL_XP_REQUIRED: ${LEVEL_XP_REQUIRED:-30}
       DAILY_ATTENDANCE_XP: ${DAILY_ATTENDANCE_XP:-5}
       ROUND_COMPLETION_XP: ${ROUND_COMPLETION_XP:-30}
