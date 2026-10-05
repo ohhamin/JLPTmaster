@@ -76,6 +76,24 @@ class _AttendanceDialogBody extends StatelessWidget {
             ),
             const SizedBox(height: 7),
             Text(
+              '${reward.currentAttendanceStreak}일 연속 출석 중!',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: scheme.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '최고 연속 출석 ${reward.maxAttendanceStreak}일',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 10),
+            Text(
               '꾸준히 공부한 보상으로 경험치를 받았어요.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
