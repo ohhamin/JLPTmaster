@@ -10,6 +10,7 @@ import 'services/tts_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 import 'widgets/app_scene_background.dart';
+import 'widgets/attendance_dialog.dart';
 import 'widgets/level_up_dialog.dart';
 import 'widgets/nickname_dialog.dart';
 
@@ -105,6 +106,10 @@ class _AuthGateState extends State<_AuthGate> {
             await ProfileService.instance.updateNickname(nickname);
           },
         );
+      }
+      if (!mounted) return;
+      if (reward != null && reward.attendanceAwarded) {
+        await AttendanceDialog.show(context, reward);
       }
       if (!mounted) return;
       if (reward != null && reward.leveledUp) {
