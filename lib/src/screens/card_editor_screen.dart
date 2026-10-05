@@ -18,6 +18,7 @@ class CardEditorScreen extends StatefulWidget {
     required this.experience,
     required this.xpRequired,
     required this.initialDecorations,
+    this.initialTemplateId = 'chiikawa_basic',
   });
 
   final String nickname;
@@ -25,6 +26,7 @@ class CardEditorScreen extends StatefulWidget {
   final int experience;
   final int xpRequired;
   final List<CardDecorationPlacement> initialDecorations;
+  final String initialTemplateId;
 
   @override
   State<CardEditorScreen> createState() => _CardEditorScreenState();
@@ -33,6 +35,7 @@ class CardEditorScreen extends StatefulWidget {
 class _CardEditorScreenState extends State<CardEditorScreen> {
   final GlobalKey _cardCaptureKey = GlobalKey();
   late List<CardDecorationPlacement> _items;
+  late String _templateId;
   String? _selectedUid;
   bool _saving = false;
 
@@ -40,6 +43,9 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
   void initState() {
     super.initState();
     _items = widget.initialDecorations.take(1).toList(growable: true);
+    _templateId = isKnownCardTemplate(widget.initialTemplateId)
+        ? widget.initialTemplateId
+        : 'chiikawa_basic';
     if (_items.isNotEmpty) _selectedUid = _items.first.uid;
   }
 
@@ -75,6 +81,16 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
     });
   }
 
+  void _selectTemplate(CardTemplateDefinition template) {
+    if (widget.level < template.unlockLevel) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lv.${template.unlockLevel}부터 ${template.label} 카드를 사용할 수 있어요.')),
+      );
+      return;
+    }
+    setState(() => _templateId = template.id);
+  }
+
   void _add(CardDecorationDefinition definition) {
     final placement = CardDecorationPlacement(
       uid: '${DateTime.now().microsecondsSinceEpoch}_${definition.id}',
@@ -97,7 +113,13 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
     });
   }
 
-  void _reset() => _removeSelected();
+  void _reset() {
+    setState(() {
+      _items.clear();
+      _selectedUid = null;
+      _templateId = 'chiikawa_basic';
+    });
+  }
 
   Future<Uint8List> _captureStaticCardPng() async {
     await WidgetsBinding.instance.endOfFrame;
@@ -125,7 +147,10 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
     });
     try {
       final pngBytes = await _captureStaticCardPng();
-      final saved = await CardCustomizationService.instance.save(_items);
+      final saved = await CardCustomizationService.instance.save(
+        _items,
+        templateId: _templateId,
+      );
       await CardImageService.instance.upload(pngBytes);
       if (!mounted) return;
       Navigator.of(context).pop(saved);
@@ -142,7 +167,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        const UserCardArtwork(),
+        UserCardArtwork(templateId: _templateId),
         LayoutBuilder(
           builder: (context, constraints) {
             final cardWidth = constraints.maxWidth;
@@ -197,6 +222,25 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
     );
   }
 
+  Widget _templateSelector(ColorScheme scheme) {
+    return Row(
+      children: [
+        for (var index = 0; index < cardTemplateCatalog.length; index++) ...[
+          if (index > 0) const SizedBox(width: 7),
+          Expanded(
+            child: _TemplateChoice(
+              template: cardTemplateCatalog[index],
+              selected: _templateId == cardTemplateCatalog[index].id,
+              unlocked: widget.level >= cardTemplateCatalog[index].unlockLevel,
+              onTap: () => _selectTemplate(cardTemplateCatalog[index]),
+              scheme: scheme,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -227,9 +271,11 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
         child: Column(
           children: [
+            _templateSelector(scheme),
+            const SizedBox(height: 8),
             AspectRatio(
               aspectRatio: 4 / 3,
               child: Stack(
@@ -245,15 +291,16 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                       level: widget.level,
                       experience: widget.experience,
                       xpRequired: widget.xpRequired,
+                      templateId: _templateId,
                     ),
                   ),
                 ],
               ),
             ),
             if (selected != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 7),
               Container(
-                padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+                padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
                 decoration: BoxDecoration(
                   color: scheme.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(16),
@@ -299,7 +346,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                 ),
               ),
             ],
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Text(
@@ -318,7 +365,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 7),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -389,6 +436,67 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TemplateChoice extends StatelessWidget {
+  const _TemplateChoice({
+    required this.template,
+    required this.selected,
+    required this.unlocked,
+    required this.onTap,
+    required this.scheme,
+  });
+
+  final CardTemplateDefinition template;
+  final bool selected;
+  final bool unlocked;
+  final VoidCallback onTap;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected
+          ? scheme.primary.withValues(alpha: 0.16)
+          : scheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? scheme.primary : scheme.outlineVariant,
+              width: selected ? 1.8 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (!unlocked) ...[
+                Icon(Icons.lock_rounded, size: 13, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 3),
+              ],
+              Flexible(
+                child: Text(
+                  unlocked ? template.label : '${template.label} · Lv.${template.unlockLevel}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: unlocked ? scheme.onSurface : scheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
