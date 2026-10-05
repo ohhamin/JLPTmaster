@@ -7,6 +7,7 @@ import re
 
 
 _PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
+_WEBP_SIGNATURE = b'RIFF'
 _SAFE_USER_ID = re.compile(r'^[A-Za-z0-9_-]{1,128}$')
 
 
@@ -26,10 +27,28 @@ class CardImageStore:
         return value
 
     def path_for(self, user_id: str) -> Path:
-        return self.root / f'{self._safe_user_id(user_id)}.png'
+        # Deliberately extensionless: the file name itself is the user id.
+        # The initial bundled artwork is WebP, while edited snapshots are PNG.
+        # Reusing one path means edits always overwrite instead of accumulating.
+        return self.root / self._safe_user_id(user_id)
 
     def exists(self, user_id: str) -> bool:
         return self.path_for(user_id).is_file()
+
+    @staticmethod
+    def media_type_for_bytes(data: bytes) -> str:
+        if data.startswith(_PNG_SIGNATURE):
+            return 'image/png'
+        if data.startswith(_WEBP_SIGNATURE) and data[8:12] == b'WEBP':
+            return 'image/webp'
+        return 'application/octet-stream'
+
+    def media_type(self, user_id: str) -> str:
+        path = self.path_for(user_id)
+        try:
+            return self.media_type_for_bytes(path.read_bytes()[:16])
+        except OSError:
+            return 'application/octet-stream'
 
     def _load_default(self) -> bytes | None:
         if self._default_bytes is not None:
@@ -42,10 +61,17 @@ class CardImageStore:
             decoded = base64.b64decode(encoded, validate=True)
         except Exception:
             return None
-        if not decoded.startswith(_PNG_SIGNATURE):
+        if self.media_type_for_bytes(decoded) not in {'image/png', 'image/webp'}:
             return None
         self._default_bytes = decoded
         return decoded
+
+    def _atomic_write(self, target: Path, data: bytes) -> Path:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temp = target.with_name(f'{target.name}.tmp')
+        temp.write_bytes(data)
+        os.replace(temp, target)
+        return target
 
     def ensure_default(self, user_id: str) -> Path | None:
         target = self.path_for(user_id)
@@ -54,15 +80,9 @@ class CardImageStore:
         default = self._load_default()
         if default is None:
             return None
-        self.save(user_id, default)
-        return target
+        return self._atomic_write(target, default)
 
     def save(self, user_id: str, png_bytes: bytes) -> Path:
         if not png_bytes.startswith(_PNG_SIGNATURE):
             raise ValueError('not a png image')
-        target = self.path_for(user_id)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temp = target.with_suffix('.png.tmp')
-        temp.write_bytes(png_bytes)
-        os.replace(temp, target)
-        return target
+        return self._atomic_write(self.path_for(user_id), png_bytes)
