@@ -1,6 +1,10 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../services/card_customization_service.dart';
+import '../services/card_image_service.dart';
 import '../services/gamification_service.dart';
 import '../services/profile_service.dart';
 import '../services/session_store.dart';
@@ -19,8 +23,10 @@ class MyPageScreen extends StatefulWidget {
 }
 
 class _MyPageScreenState extends State<MyPageScreen> {
+  final GlobalKey _cardCaptureKey = GlobalKey();
   bool _loading = true;
   bool _loggingOut = false;
+  bool _syncingCard = false;
   LevelingStatus? _leveling;
   List<CardDecorationPlacement> _decorations = const [];
 
@@ -48,6 +54,38 @@ class _MyPageScreenState extends State<MyPageScreen> {
       _decorations = decorations ?? _decorations;
       _loading = false;
     });
+    _scheduleCardSnapshotSync();
+  }
+
+  void _scheduleCardSnapshotSync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _loading || _syncingCard) return;
+      _syncCardSnapshot();
+    });
+  }
+
+  Future<void> _syncCardSnapshot() async {
+    if (_syncingCard || !ProfileService.instance.hasNickname) return;
+    final renderObject = _cardCaptureKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderRepaintBoundary || renderObject.debugNeedsPaint) {
+      return;
+    }
+    _syncingCard = true;
+    try {
+      final image = await renderObject.toImage(pixelRatio: 3.0);
+      try {
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (data == null) return;
+        await CardImageService.instance.upload(data.buffer.asUint8List());
+      } finally {
+        image.dispose();
+      }
+    } catch (_) {
+      // The editable metadata remains the source of truth. A failed snapshot
+      // can be retried on the next My Page refresh or card save.
+    } finally {
+      _syncingCard = false;
+    }
   }
 
   Future<void> _logout() async {
@@ -66,6 +104,9 @@ class _MyPageScreenState extends State<MyPageScreen> {
         await ProfileService.instance.updateNickname(nickname);
       },
     );
+    if (!mounted) return;
+    setState(() {});
+    _scheduleCardSnapshotSync();
   }
 
   Future<void> _openCardEditor(String displayName) async {
@@ -84,7 +125,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
     if (!mounted || result == null) return;
     setState(() => _decorations = result);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('카드 꾸미기를 저장했어요.')),
+      const SnackBar(content: Text('카드 이미지까지 서버에 저장했어요.')),
     );
   }
 
@@ -148,13 +189,16 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              UserProfileCard(
-                nickname: displayName,
-                level: status?.level ?? 1,
-                experience: status?.experience ?? 0,
-                xpRequired: status?.xpRequired ?? 30,
-                loading: _loading,
-                decorations: _decorations,
+              RepaintBoundary(
+                key: _cardCaptureKey,
+                child: UserProfileCard(
+                  nickname: displayName,
+                  level: status?.level ?? 1,
+                  experience: status?.experience ?? 0,
+                  xpRequired: status?.xpRequired ?? 30,
+                  loading: _loading,
+                  decorations: _decorations,
+                ),
               ),
               const SizedBox(height: 18),
               _MyPageCard(
