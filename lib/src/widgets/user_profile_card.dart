@@ -90,35 +90,44 @@ class UserCardArtwork extends StatelessWidget {
   final String templateId;
   final List<CardDecorationPlacement> decorations;
 
-  static const int _chiikawaArtworkPartCount = 14;
-  static Future<Uint8List>? _chiikawaArtworkBytes;
   static final Map<String, Future<Uint8List>> _templateCache = {};
 
-  static Future<Uint8List> _loadChiikawaArtwork() {
-    return _chiikawaArtworkBytes ??= () async {
+  static Future<Uint8List> _loadPartedArtwork(
+    String cacheKey,
+    String filePrefix,
+    int partCount,
+  ) {
+    return _templateCache.putIfAbsent(cacheKey, () async {
       final parts = await Future.wait(
         List.generate(
-          _chiikawaArtworkPartCount,
+          partCount,
           (index) => rootBundle.loadString(
-            'assets/cards/default_chiikawa_card.part-${index.toString().padLeft(2, '0')}',
+            'assets/cards/$filePrefix.part-${index.toString().padLeft(2, '0')}',
           ),
         ),
       );
       return base64Decode(parts.join());
-    }();
+    });
   }
 
   static Future<Uint8List> _loadArtwork(String templateId) {
-    if (templateId == 'chiikawa_basic') return _loadChiikawaArtwork();
-    return _templateCache.putIfAbsent(templateId, () async {
-      final path = switch (templateId) {
-        'hachiware_basic' => 'assets/cards/hachiware_card.webp',
-        'usagi_basic' => 'assets/cards/usagi_card.webp',
-        _ => 'assets/cards/hachiware_card.webp',
-      };
-      final data = await rootBundle.load(path);
-      return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-    });
+    return switch (templateId) {
+      'hachiware_basic' => _loadPartedArtwork(
+          'hachiware_basic',
+          'hachiware_v2_card',
+          5,
+        ),
+      'usagi_basic' => _loadPartedArtwork(
+          'usagi_basic',
+          'usagi_card',
+          3,
+        ),
+      _ => _loadPartedArtwork(
+          'chiikawa_basic',
+          'default_chiikawa_card',
+          14,
+        ),
+    };
   }
 
   @override
