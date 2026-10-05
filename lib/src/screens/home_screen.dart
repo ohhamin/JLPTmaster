@@ -4,7 +4,7 @@ import '../theme/theme_controller.dart';
 import '../widgets/app_scene_background.dart';
 import 'favorites_screen.dart';
 import 'level_home_screen.dart';
-import 'settings_screen.dart';
+import 'my_page_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.onLogout});
@@ -18,7 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
 
-  static const _titles = ['JLPTmaster', '즐겨찾기', '설정'];
+  static const _titles = ['JLPTmaster', '즐겨찾기', '마이페이지'];
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const LevelHomeScreen(),
             const FavoritesScreen(),
-            SettingsScreen(onLogout: widget.onLogout),
+            MyPageScreen(onLogout: widget.onLogout),
           ],
         ),
         bottomNavigationBar: DecoratedBox(
@@ -71,9 +71,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: '즐겨찾기',
               ),
               NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings_rounded),
-                label: '설정',
+                icon: Icon(Icons.person_outline_rounded),
+                selectedIcon: Icon(Icons.person_rounded),
+                label: '마이페이지',
               ),
             ],
           ),
