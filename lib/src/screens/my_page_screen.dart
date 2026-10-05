@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../services/gamification_service.dart';
 import '../services/profile_service.dart';
 import '../services/session_store.dart';
-import '../widgets/brand_mascot.dart';
 import '../widgets/nickname_dialog.dart';
+import '../widgets/user_profile_card.dart';
 import 'settings_screen.dart';
 
 class MyPageScreen extends StatefulWidget {
@@ -125,9 +125,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              _UserCardPreview(
-                displayName: displayName,
-                status: status,
+              UserProfileCard(
+                nickname: displayName,
+                level: status?.level ?? 1,
+                experience: status?.experience ?? 0,
+                xpRequired: status?.xpRequired ?? 30,
                 loading: _loading,
               ),
               const SizedBox(height: 18),
@@ -198,179 +200,6 @@ class _MyPageScreenState extends State<MyPageScreen> {
           ),
         );
       },
-    );
-  }
-}
-
-class _UserCardPreview extends StatelessWidget {
-  const _UserCardPreview({
-    required this.displayName,
-    required this.status,
-    required this.loading,
-  });
-
-  final String displayName;
-  final LevelingStatus? status;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    final level = status?.level ?? 1;
-    final experience = status?.experience ?? 0;
-    final required = status?.xpRequired ?? 30;
-    final progress = status?.progress.clamp(0.0, 1.0) ?? 0.0;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    const outline = Color(0xFF5A2B20);
-    final cardFill = isDark ? const Color(0xFFF9F3E9) : const Color(0xFFFFFCF6);
-    final mint = isDark ? const Color(0xFF9ADDB9) : const Color(0xFFBFF1D2);
-
-    return AspectRatio(
-      aspectRatio: 4 / 3,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: mint,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: outline, width: 4),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: cardFill,
-            borderRadius: BorderRadius.circular(21),
-            border: Border.all(color: outline, width: 3),
-          ),
-          child: Column(
-            children: [
-              Expanded(
-                flex: 55,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 18, 12, 12),
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: Text(
-                            displayName,
-                            style: const TextStyle(
-                              color: outline,
-                              fontSize: 27,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      width: 132,
-                      margin: const EdgeInsets.fromLTRB(0, 10, 10, 8),
-                      decoration: BoxDecoration(
-                        color: mint.withValues(alpha: 0.76),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: outline, width: 3),
-                      ),
-                      child: const Center(
-                        child: BrandMascot(size: 102),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(height: 3, color: outline),
-              Expanded(
-                flex: 45,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 15, 22, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (loading)
-                        const SizedBox(
-                          height: 22,
-                          width: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2.5),
-                        )
-                      else ...[
-                        Text(
-                          '레벨 : $level    경험치 : $experience/$required',
-                          style: const TextStyle(
-                            color: outline,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.4,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _CuteProgressBar(progress: progress, fillColor: mint),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CuteProgressBar extends StatelessWidget {
-  const _CuteProgressBar({required this.progress, required this.fillColor});
-
-  final double progress;
-  final Color fillColor;
-
-  @override
-  Widget build(BuildContext context) {
-    const outline = Color(0xFF5A2B20);
-    return Container(
-      height: 20,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF7E9),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: outline, width: 2.5),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth * progress.clamp(0.0, 1.0);
-          return Stack(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeOutCubic,
-                width: width,
-                decoration: BoxDecoration(
-                  color: fillColor,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              if (width > 28)
-                Positioned(
-                  right: constraints.maxWidth - width + 7,
-                  top: 1,
-                  child: const Icon(
-                    Icons.auto_awesome_rounded,
-                    size: 11,
-                    color: Color(0xFFFFD65A),
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
     );
   }
 }
