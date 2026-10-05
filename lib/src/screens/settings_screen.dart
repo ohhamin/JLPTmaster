@@ -17,7 +17,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _loading = true;
   bool _saving = false;
-  bool _loggingOut = false;
   String? _error;
 
   double _speechRate = 0.45;
@@ -94,12 +93,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _logout() async {
-    if (_loggingOut) return;
-    setState(() => _loggingOut = true);
-    await widget.onLogout();
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -143,10 +136,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-              ),
-              TextButton(
-                onPressed: _loggingOut ? null : _logout,
-                child: Text(_loggingOut ? '로그아웃 중' : '로그아웃'),
               ),
             ],
           ),
