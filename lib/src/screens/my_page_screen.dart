@@ -6,6 +6,7 @@ import 'package:gal/gal.dart';
 
 import '../services/card_customization_service.dart';
 import '../services/card_song_service.dart';
+import '../services/feedback_sound_service.dart';
 import '../services/gamification_service.dart';
 import '../services/profile_service.dart';
 import '../services/session_store.dart';
@@ -27,6 +28,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
   final GlobalKey _downloadCardKey = GlobalKey();
   bool _loading = true;
   bool _loggingOut = false;
+  bool _logoutDialogOpen = false;
   bool _downloading = false;
   LevelingStatus? _leveling;
   List<CardDecorationPlacement> _decorations = const [];
@@ -60,7 +62,47 @@ class _MyPageScreenState extends State<MyPageScreen> {
   }
 
   Future<void> _logout() async {
-    if (_loggingOut) return;
+    if (_loggingOut || _logoutDialogOpen) return;
+    _logoutDialogOpen = true;
+
+    try {
+      await FeedbackSoundService.instance.playNo();
+    } catch (_) {}
+
+    if (!mounted) {
+      _logoutDialogOpen = false;
+      return;
+    }
+
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.logout_rounded, size: 34),
+        title: const Text(
+          '로그아웃할까요?',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        content: const Text(
+          '현재 계정에서 로그아웃합니다.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('로그아웃'),
+          ),
+        ],
+      ),
+    );
+
+    _logoutDialogOpen = false;
+    if (!mounted || shouldLogout != true) return;
+
     setState(() => _loggingOut = true);
     await CardSongService.instance.stop();
     CardCustomizationService.instance.reset();
