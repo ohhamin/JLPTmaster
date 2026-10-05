@@ -178,42 +178,12 @@ class _MyPageScreenState extends State<MyPageScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 118),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '나의 카드',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.6,
-                          ),
+              Text(
+                '나의 카드',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.6,
                     ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _loading ? null : () => _openCardEditor(displayName),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 36),
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      visualDensity: VisualDensity.compact,
-                      shape: const StadiumBorder(),
-                    ),
-                    icon: const Icon(Icons.auto_awesome_rounded, size: 16),
-                    label: const Text('꾸미기'),
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton.filledTonal(
-                    tooltip: '카드 이미지 저장',
-                    onPressed: _downloading || _loading ? null : _downloadCard,
-                    visualDensity: VisualDensity.compact,
-                    icon: _downloading
-                        ? const SizedBox(
-                            width: 17,
-                            height: 17,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.download_rounded, size: 19),
-                  ),
-                ],
               ),
               const SizedBox(height: 5),
               Text(
@@ -235,6 +205,32 @@ class _MyPageScreenState extends State<MyPageScreen> {
                   decorations: _decorations,
                   onCharacterTap: _loading ? null : _playCardSong,
                 ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _loading ? null : () => _openCardEditor(displayName),
+                      icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                      label: const Text('카드 꾸미기'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _downloading || _loading ? null : _downloadCard,
+                      icon: _downloading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_rounded, size: 18),
+                      label: const Text('이미지 저장'),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 18),
               _MyPageCard(
@@ -275,7 +271,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                     const SizedBox(width: 8),
                     OutlinedButton(
                       onPressed: _editNickname,
-                      child: const Text('수정하기'),
+                      child: const Text('닉네임 수정'),
                     ),
                   ],
                 ),
