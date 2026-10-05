@@ -5,28 +5,25 @@ class CardSongService {
 
   static final CardSongService instance = CardSongService._();
 
-  static const String _audioBaseUrl =
-      'https://jlptmaster.duckdns.org/audio';
-
   final AudioPlayer _player = AudioPlayer();
   String? _playingTemplateId;
 
-  String _audioUrl(String templateId) {
+  String _assetPath(String templateId) {
     switch (templateId) {
       case 'hachiware_basic':
-        return '$_audioBaseUrl/hachiware.mp3';
+        return 'audio/hachiware.mp3';
       case 'usagi_basic':
-        return '$_audioBaseUrl/usagi.mp3';
+        return 'audio/usagi.mp3';
       case 'chiikawa_basic':
       default:
-        return '$_audioBaseUrl/chiikawa.mp3';
+        return 'audio/chiikawa.mp3';
     }
   }
 
   Future<void> play(String templateId) async {
     await _player.stop();
     _playingTemplateId = templateId;
-    await _player.play(UrlSource(_audioUrl(templateId)));
+    await _player.play(AssetSource(_assetPath(templateId)));
   }
 
   Future<void> stop() async {
