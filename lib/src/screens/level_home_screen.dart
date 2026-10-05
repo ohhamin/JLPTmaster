@@ -54,9 +54,9 @@ class _LevelHomeScreenState extends State<LevelHomeScreen> {
 
           return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 34),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 120),
             itemCount: levels.length + 1,
-            separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 22 : 12),
+            separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 20 : 10),
             itemBuilder: (context, index) {
               if (index == 0) {
                 return const _LevelHeader();
@@ -135,12 +135,12 @@ class _LevelCard extends StatelessWidget {
             border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
             child: Row(
               children: [
                 Container(
                   width: 5,
-                  height: 72,
+                  height: 58,
                   decoration: BoxDecoration(
                     color: scheme.primary.withValues(alpha: accentAlpha.clamp(0.0, 1.0)),
                     borderRadius: BorderRadius.circular(99),
@@ -159,6 +159,7 @@ class _LevelCard extends StatelessWidget {
                 ),
                 Expanded(
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
@@ -167,7 +168,7 @@ class _LevelCard extends StatelessWidget {
                               fontWeight: FontWeight.w800,
                             ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 5),
                       Text(
                         '즐겨찾기 ${summary.favorites} · 챕터를 골라 반복 학습',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
