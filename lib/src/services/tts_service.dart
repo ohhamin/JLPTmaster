@@ -47,7 +47,7 @@ class TtsVoiceOption {
     return '$provider · $availability$quality';
   }
 
-  String get label => koreanLabel;
+  String get label => '$koreanLabel · $koreanDescription';
 }
 
 class TtsSettings {
