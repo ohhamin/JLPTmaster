@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/card_customization_service.dart';
+import '../services/feedback_sound_service.dart';
 import '../services/gamification_service.dart';
 import 'card_decoration.dart';
 
@@ -25,6 +26,10 @@ class LevelUpDialog {
       unlocked = await CardCustomizationService.instance.grantRandomDecorations(
         reward.levelsGained <= 0 ? 1 : reward.levelsGained,
       );
+    } catch (_) {}
+    if (!context.mounted) return;
+    try {
+      await FeedbackSoundService.instance.playYes();
     } catch (_) {}
     if (!context.mounted) return;
 
