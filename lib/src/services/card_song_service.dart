@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:audioplayers/audioplayers.dart';
 
 class CardSongService {
@@ -6,24 +8,27 @@ class CardSongService {
   static final CardSongService instance = CardSongService._();
 
   final AudioPlayer _player = AudioPlayer();
+  final Random _random = Random();
   String? _playingTemplateId;
 
-  String _assetPath(String templateId) {
+  List<String> _assetPaths(String templateId) {
     switch (templateId) {
       case 'hachiware_basic':
-        return 'audio/hachiware.mp3';
+        return const ['audio/hachiware.mp3', 'audio/hachiware2.mp3'];
       case 'usagi_basic':
-        return 'audio/usagi.mp3';
+        return const ['audio/usagi.mp3', 'audio/usagi2.mp3'];
       case 'chiikawa_basic':
       default:
-        return 'audio/chiikawa.mp3';
+        return const ['audio/chiikawa.mp3', 'audio/chiikawa2.mp3'];
     }
   }
 
   Future<void> play(String templateId) async {
     await _player.stop();
     _playingTemplateId = templateId;
-    await _player.play(AssetSource(_assetPath(templateId)));
+    final candidates = _assetPaths(templateId);
+    final selected = candidates[_random.nextInt(candidates.length)];
+    await _player.play(AssetSource(selected));
   }
 
   Future<void> stop() async {
