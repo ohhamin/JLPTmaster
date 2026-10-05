@@ -53,6 +53,20 @@ class ThemeController {
     } catch (_) {}
   }
 
+  /// 로그인 화면에서 사용자가 선택한 현재 테마를 로그인 직후 그대로 유지하고,
+  /// 그 값을 계정 설정에도 저장한다. 서버의 이전 테마가 로그인 화면을 덮어쓰지
+  /// 않도록 명시적 로그인/회원가입 직후에만 사용한다.
+  static Future<void> syncCurrentToServer() async {
+    final current = mode.value == ThemeMode.dark ? ThemeMode.dark : ThemeMode.light;
+    await _saveLocal(current);
+    if (!SessionStore.isAuthenticated) return;
+    try {
+      await ApiService().updateSettings({
+        'theme_mode': current == ThemeMode.dark ? 'dark' : 'light',
+      });
+    } catch (_) {}
+  }
+
   static Future<void> toggle() async {
     final next = mode.value == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     mode.value = next;
