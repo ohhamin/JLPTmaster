@@ -2,6 +2,27 @@ import 'package:flutter/foundation.dart';
 
 import 'api_service.dart';
 
+class CardTemplateDefinition {
+  const CardTemplateDefinition({
+    required this.id,
+    required this.label,
+    required this.unlockLevel,
+  });
+
+  final String id;
+  final String label;
+  final int unlockLevel;
+}
+
+const cardTemplateCatalog = <CardTemplateDefinition>[
+  CardTemplateDefinition(id: 'chiikawa_basic', label: '치이카와', unlockLevel: 1),
+  CardTemplateDefinition(id: 'hachiware_basic', label: '하치와레', unlockLevel: 5),
+  CardTemplateDefinition(id: 'usagi_basic', label: '우사기', unlockLevel: 10),
+];
+
+bool isKnownCardTemplate(String id) =>
+    cardTemplateCatalog.any((template) => template.id == id);
+
 class CardDecorationPlacement {
   const CardDecorationPlacement({
     required this.uid,
@@ -68,12 +89,19 @@ class CardCustomizationService {
   final ApiService _api = ApiService();
   final ValueNotifier<List<CardDecorationPlacement>> decorations =
       ValueNotifier<List<CardDecorationPlacement>>(const []);
+  final ValueNotifier<String> templateId = ValueNotifier<String>('chiikawa_basic');
 
   Future<List<CardDecorationPlacement>> refresh() async {
     final settings = await _api.fetchSettings();
     final card = Map<String, dynamic>.from(
       settings['card'] as Map? ?? const <String, dynamic>{},
     );
+
+    final rawTemplate = card['template_id']?.toString() ?? 'chiikawa_basic';
+    templateId.value = isKnownCardTemplate(rawTemplate)
+        ? rawTemplate
+        : 'chiikawa_basic';
+
     final raw = card['decorations'];
     final parsed = <CardDecorationPlacement>[];
     if (raw is List) {
@@ -84,6 +112,7 @@ class CardCustomizationService {
         );
         if (placement.uid.isEmpty || placement.assetId.isEmpty) continue;
         parsed.add(placement);
+        break;
       }
     }
     decorations.value = List.unmodifiable(parsed);
@@ -91,10 +120,14 @@ class CardCustomizationService {
   }
 
   Future<List<CardDecorationPlacement>> save(
-    List<CardDecorationPlacement> value,
-  ) async {
+    List<CardDecorationPlacement> value, {
+    String? templateId,
+  }) async {
+    final selectedTemplate = templateId != null && isKnownCardTemplate(templateId)
+        ? templateId
+        : this.templateId.value;
     final normalized = value
-        .take(24)
+        .take(1)
         .map(
           (item) => item.copyWith(
             x: item.x.clamp(0.0, 1.0).toDouble(),
@@ -105,15 +138,17 @@ class CardCustomizationService {
         .toList(growable: false);
     await _api.updateSettings({
       'card': {
-        'template_id': 'chiikawa_basic',
+        'template_id': selectedTemplate,
         'decorations': normalized.map((item) => item.toJson()).toList(),
       },
     });
+    this.templateId.value = selectedTemplate;
     decorations.value = List.unmodifiable(normalized);
     return decorations.value;
   }
 
   void reset() {
+    templateId.value = 'chiikawa_basic';
     decorations.value = const [];
   }
 }
