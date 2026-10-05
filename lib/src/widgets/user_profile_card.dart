@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -108,8 +107,22 @@ class UserCardArtwork extends StatelessWidget {
     });
   }
 
+  static Future<Uint8List> _loadBase64Artwork(
+    String cacheKey,
+    String assetPath,
+  ) {
+    return _templateCache.putIfAbsent(cacheKey, () async {
+      final encoded = await rootBundle.loadString(assetPath, cache: false);
+      return base64Decode(encoded.trim());
+    });
+  }
+
   static Future<Uint8List> _loadArtwork(String templateId) {
     return switch (templateId) {
+      'hachiware_basic' => _loadBase64Artwork(
+          'hachiware_user_card',
+          'assets/cards/hachiware_user.webp.b64',
+        ),
       'usagi_basic' => _loadPartedArtwork(
           'usagi_basic',
           'usagi_card',
@@ -125,29 +138,6 @@ class UserCardArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (templateId == 'hachiware_basic') {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          final height = constraints.maxHeight;
-          return Stack(
-            fit: StackFit.expand,
-            clipBehavior: Clip.hardEdge,
-            children: [
-              const CustomPaint(painter: _HachiwareCardPainter()),
-              ...decorations.map(
-                (placement) => CardDecorationOverlay(
-                  placement: placement,
-                  cardWidth: width,
-                  cardHeight: height,
-                ),
-              ),
-            ],
-          );
-        },
-      );
-    }
-
     return FutureBuilder<Uint8List>(
       key: ValueKey(templateId),
       future: _loadArtwork(templateId),
@@ -194,144 +184,6 @@ class UserCardArtwork extends StatelessWidget {
       },
     );
   }
-}
-
-class _HachiwareCardPainter extends CustomPainter {
-  const _HachiwareCardPainter();
-
-  static const outline = Color(0xFF5A3428);
-  static const cream = Color(0xFFFFFCF6);
-  static const blue = Color(0xFF8ED0F3);
-  static const paleBlue = Color(0xFFDFF3FF);
-  static const mint = Color(0xFFCFF3DF);
-  static const pink = Color(0xFFF59AB2);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final sx = size.width / 400;
-    final sy = size.height / 300;
-    canvas.save();
-    canvas.scale(sx, sy);
-
-    final fill = Paint()..style = PaintingStyle.fill;
-    final line = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 7
-      ..strokeJoin = StrokeJoin.round
-      ..strokeCap = StrokeCap.round
-      ..color = outline;
-
-    final outer = RRect.fromRectAndRadius(
-      const Rect.fromLTWH(14, 12, 372, 276),
-      const Radius.circular(30),
-    );
-    fill.color = cream;
-    canvas.drawRRect(outer, fill);
-    line.color = blue;
-    line.strokeWidth = 14;
-    canvas.drawRRect(outer, line);
-    line.color = outline;
-    line.strokeWidth = 5;
-    canvas.drawRRect(outer, line);
-
-    final inner = RRect.fromRectAndRadius(
-      const Rect.fromLTWH(28, 28, 344, 232),
-      const Radius.circular(22),
-    );
-    line.strokeWidth = 4;
-    canvas.drawRRect(inner, line);
-
-    canvas.drawLine(const Offset(30, 175), const Offset(370, 175), line);
-    canvas.drawLine(const Offset(235, 30), const Offset(235, 174), line);
-
-    fill.color = mint;
-    final crown = Path()
-      ..moveTo(174, 32)
-      ..lineTo(186, 48)
-      ..lineTo(200, 29)
-      ..lineTo(214, 48)
-      ..lineTo(226, 32)
-      ..lineTo(221, 58)
-      ..lineTo(180, 58)
-      ..close();
-    canvas.drawPath(crown, fill);
-    line.strokeWidth = 5;
-    canvas.drawPath(crown, line);
-
-    // Hachiware-inspired blue/white cat mascot.
-    final head = Path()
-      ..moveTo(260, 82)
-      ..lineTo(270, 55)
-      ..lineTo(293, 72)
-      ..quadraticBezierTo(320, 60, 345, 76)
-      ..lineTo(365, 58)
-      ..lineTo(360, 92)
-      ..quadraticBezierTo(370, 119, 358, 143)
-      ..quadraticBezierTo(342, 168, 308, 166)
-      ..quadraticBezierTo(274, 165, 253, 143)
-      ..quadraticBezierTo(241, 119, 260, 82)
-      ..close();
-    fill.color = cream;
-    canvas.drawPath(head, fill);
-    canvas.drawPath(head, line);
-
-    final cap = Path()
-      ..moveTo(258, 90)
-      ..quadraticBezierTo(280, 67, 309, 71)
-      ..quadraticBezierTo(340, 67, 360, 92)
-      ..quadraticBezierTo(345, 106, 331, 104)
-      ..quadraticBezierTo(316, 91, 307, 89)
-      ..quadraticBezierTo(296, 92, 284, 104)
-      ..quadraticBezierTo(270, 106, 258, 90)
-      ..close();
-    fill.color = paleBlue;
-    canvas.drawPath(cap, fill);
-
-    fill.color = blue;
-    canvas.drawPath(
-      Path()
-        ..moveTo(270, 56)
-        ..lineTo(291, 72)
-        ..lineTo(277, 78)
-        ..close(),
-      fill,
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(365, 59)
-        ..lineTo(345, 76)
-        ..lineTo(356, 82)
-        ..close(),
-      fill,
-    );
-
-    fill.color = outline;
-    canvas.drawCircle(const Offset(291, 122), 4, fill);
-    canvas.drawCircle(const Offset(331, 122), 4, fill);
-
-    line.strokeWidth = 4;
-    final mouth = Path()
-      ..moveTo(307, 137)
-      ..quadraticBezierTo(311, 143, 316, 137)
-      ..quadraticBezierTo(321, 143, 326, 137);
-    canvas.drawPath(mouth, line);
-
-    fill.color = pink;
-    canvas.drawOval(const Rect.fromLTWH(267, 132, 24, 12), fill);
-    canvas.drawOval(const Rect.fromLTWH(337, 132, 24, 12), fill);
-
-    // Small paw/peace gesture.
-    fill.color = cream;
-    canvas.drawCircle(const Offset(261, 150), 13, fill);
-    canvas.drawCircle(const Offset(253, 141), 7, fill);
-    canvas.drawCircle(const Offset(266, 137), 7, fill);
-    canvas.drawCircle(const Offset(261, 150), 13, line);
-
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _HachiwareCardPainter oldDelegate) => false;
 }
 
 class UserCardInfoOverlay extends StatelessWidget {
