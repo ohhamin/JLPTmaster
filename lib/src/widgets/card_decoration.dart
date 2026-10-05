@@ -109,15 +109,20 @@ class _DecorationPainter extends CustomPainter {
     switch (id) {
       case 'pink_bow':
         _bow(canvas, fill, line, _pink);
+        break;
       case 'red_headband':
         _headband(canvas, fill, line, _red);
+        break;
       case 'blue_headband':
         _headband(canvas, fill, line, _blue);
+        break;
       case 'mint_headband':
         _headband(canvas, fill, line, _mint);
+        break;
       case 'heart_pair':
         _heart(canvas, const Offset(37, 46), 25, _pink, fill, line);
         _heart(canvas, const Offset(65, 60), 19, _red, fill, line);
+        break;
       case 'heart_bubble':
         final bubble = Path()
           ..moveTo(18, 24)
@@ -132,23 +137,36 @@ class _DecorationPainter extends CustomPainter {
         canvas.drawPath(bubble, fill);
         canvas.drawPath(bubble, line);
         _heart(canvas, const Offset(51, 47), 19, _pink, fill, line);
+        break;
       case 'sparkle':
         _spark(canvas, const Offset(50, 50), 37, _yellow, fill, line);
         _spark(canvas, const Offset(78, 25), 13, _cream, fill, line);
+        break;
       case 'daisy':
         for (var i = 0; i < 8; i++) {
           final angle = i * math.pi / 4;
-          final center = Offset(50 + math.cos(angle) * 23, 50 + math.sin(angle) * 23);
+          final center = Offset(
+            50 + math.cos(angle) * 23,
+            50 + math.sin(angle) * 23,
+          );
           fill.color = _cream;
-          canvas.drawOval(Rect.fromCenter(center: center, width: 24, height: 34), fill);
-          canvas.drawOval(Rect.fromCenter(center: center, width: 24, height: 34), line);
+          canvas.drawOval(
+            Rect.fromCenter(center: center, width: 24, height: 34),
+            fill,
+          );
+          canvas.drawOval(
+            Rect.fromCenter(center: center, width: 24, height: 34),
+            line,
+          );
         }
         fill.color = _yellow;
         canvas.drawCircle(const Offset(50, 50), 15, fill);
         canvas.drawCircle(const Offset(50, 50), 15, line);
+        break;
       case 'sprout':
         line.strokeWidth = 6;
-        canvas.drawLine(const Offset(50, 78), const Offset(50, 42), line..color = _mint);
+        line.color = _mint;
+        canvas.drawLine(const Offset(50, 78), const Offset(50, 42), line);
         final left = Path()
           ..moveTo(49, 50)
           ..quadraticBezierTo(16, 45, 22, 17)
@@ -166,6 +184,7 @@ class _DecorationPainter extends CustomPainter {
         line.strokeWidth = 5;
         canvas.drawPath(left, line);
         canvas.drawPath(right, line);
+        break;
       case 'halo':
         fill.color = _yellow;
         canvas.drawOval(const Rect.fromLTWH(12, 30, 76, 34), fill);
@@ -173,6 +192,7 @@ class _DecorationPainter extends CustomPainter {
         canvas.drawOval(const Rect.fromLTWH(12, 30, 76, 34), line);
         fill.color = _cream;
         canvas.drawOval(const Rect.fromLTWH(25, 39, 50, 16), fill);
+        break;
       case 'round_glasses':
         line.strokeWidth = 6;
         canvas.drawCircle(const Offset(31, 51), 22, line);
@@ -180,12 +200,15 @@ class _DecorationPainter extends CustomPainter {
         canvas.drawLine(const Offset(53, 48), const Offset(47, 48), line);
         canvas.drawLine(const Offset(9, 43), const Offset(1, 38), line);
         canvas.drawLine(const Offset(91, 43), const Offset(99, 38), line);
+        break;
       case 'star_glasses':
         _starOutline(canvas, const Offset(29, 50), 25, line);
         _starOutline(canvas, const Offset(71, 50), 25, line);
         canvas.drawLine(const Offset(47, 49), const Offset(53, 49), line);
+        break;
       default:
         _spark(canvas, const Offset(50, 50), 34, _yellow, fill, line);
+        break;
     }
     canvas.restore();
   }
@@ -229,26 +252,57 @@ class _DecorationPainter extends CustomPainter {
     canvas.drawPath(knot, line);
   }
 
-  void _heart(Canvas canvas, Offset center, double size, Color color, Paint fill, Paint line) {
+  void _heart(
+    Canvas canvas,
+    Offset center,
+    double size,
+    Color color,
+    Paint fill,
+    Paint line,
+  ) {
     final x = center.dx;
     final y = center.dy;
     final s = size;
     final path = Path()
       ..moveTo(x, y + s * 0.45)
-      ..cubicTo(x - s * 0.95, y - s * 0.10, x - s * 0.72, y - s * 0.82, x, y - s * 0.30)
-      ..cubicTo(x + s * 0.72, y - s * 0.82, x + s * 0.95, y - s * 0.10, x, y + s * 0.45)
+      ..cubicTo(
+        x - s * 0.95,
+        y - s * 0.10,
+        x - s * 0.72,
+        y - s * 0.82,
+        x,
+        y - s * 0.30,
+      )
+      ..cubicTo(
+        x + s * 0.72,
+        y - s * 0.82,
+        x + s * 0.95,
+        y - s * 0.10,
+        x,
+        y + s * 0.45,
+      )
       ..close();
     fill.color = color;
     canvas.drawPath(path, fill);
     canvas.drawPath(path, line);
   }
 
-  void _spark(Canvas canvas, Offset center, double radius, Color color, Paint fill, Paint line) {
+  void _spark(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    Color color,
+    Paint fill,
+    Paint line,
+  ) {
     final path = Path();
     for (var i = 0; i < 8; i++) {
       final angle = -math.pi / 2 + i * math.pi / 4;
       final r = i.isEven ? radius : radius * 0.22;
-      final p = Offset(center.dx + math.cos(angle) * r, center.dy + math.sin(angle) * r);
+      final p = Offset(
+        center.dx + math.cos(angle) * r,
+        center.dy + math.sin(angle) * r,
+      );
       if (i == 0) {
         path.moveTo(p.dx, p.dy);
       } else {
@@ -266,7 +320,10 @@ class _DecorationPainter extends CustomPainter {
     for (var i = 0; i < 10; i++) {
       final angle = -math.pi / 2 + i * math.pi / 5;
       final r = i.isEven ? radius : radius * 0.45;
-      final p = Offset(center.dx + math.cos(angle) * r, center.dy + math.sin(angle) * r);
+      final p = Offset(
+        center.dx + math.cos(angle) * r,
+        center.dy + math.sin(angle) * r,
+      );
       if (i == 0) {
         path.moveTo(p.dx, p.dy);
       } else {
@@ -278,5 +335,6 @@ class _DecorationPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _DecorationPainter oldDelegate) => oldDelegate.id != id;
+  bool shouldRepaint(covariant _DecorationPainter oldDelegate) =>
+      oldDelegate.id != id;
 }
