@@ -13,6 +13,8 @@ class LevelingStatus {
     required this.totalExperience,
     required this.dailyAttendanceXp,
     required this.roundCompletionXp,
+    required this.currentAttendanceStreak,
+    required this.maxAttendanceStreak,
     this.lastAttendanceDate,
   });
 
@@ -22,6 +24,8 @@ class LevelingStatus {
   final int totalExperience;
   final int dailyAttendanceXp;
   final int roundCompletionXp;
+  final int currentAttendanceStreak;
+  final int maxAttendanceStreak;
   final String? lastAttendanceDate;
 
   double get progress => xpRequired <= 0 ? 0 : experience / xpRequired;
@@ -33,6 +37,10 @@ class LevelingStatus {
         totalExperience: (json['total_experience'] as num?)?.toInt() ?? 0,
         dailyAttendanceXp: (json['daily_attendance_xp'] as num?)?.toInt() ?? 5,
         roundCompletionXp: (json['round_completion_xp'] as num?)?.toInt() ?? 30,
+        currentAttendanceStreak:
+            (json['current_attendance_streak'] as num?)?.toInt() ?? 0,
+        maxAttendanceStreak:
+            (json['max_attendance_streak'] as num?)?.toInt() ?? 0,
         lastAttendanceDate: json['last_attendance_date']?.toString(),
       );
 }
@@ -45,6 +53,8 @@ class ExperienceReward extends LevelingStatus {
     required super.totalExperience,
     required super.dailyAttendanceXp,
     required super.roundCompletionXp,
+    required super.currentAttendanceStreak,
+    required super.maxAttendanceStreak,
     required this.xpGained,
     required this.previousLevel,
     required this.levelsGained,
@@ -66,6 +76,10 @@ class ExperienceReward extends LevelingStatus {
         totalExperience: (json['total_experience'] as num?)?.toInt() ?? 0,
         dailyAttendanceXp: (json['daily_attendance_xp'] as num?)?.toInt() ?? 5,
         roundCompletionXp: (json['round_completion_xp'] as num?)?.toInt() ?? 30,
+        currentAttendanceStreak:
+            (json['current_attendance_streak'] as num?)?.toInt() ?? 0,
+        maxAttendanceStreak:
+            (json['max_attendance_streak'] as num?)?.toInt() ?? 0,
         lastAttendanceDate: json['last_attendance_date']?.toString(),
         xpGained: (json['xp_gained'] as num?)?.toInt() ?? 0,
         previousLevel: (json['previous_level'] as num?)?.toInt() ?? 1,
