@@ -22,25 +22,42 @@ const cardTemplateCatalog = <CardTemplateDefinition>[
   CardTemplateDefinition(id: 'usagi_basic', label: '우사기', unlockLevel: 10),
 ];
 
-const defaultUnlockedDecorationIds = <String>{
-  'round_glasses',
-  'heart_pair',
-};
+const defaultUnlockedDecorationIds = <String>{'1', '2', '3'};
 
 const allDecorationIds = <String>[
-  'pink_bow',
-  'red_headband',
-  'blue_headband',
-  'mint_headband',
-  'heart_pair',
-  'heart_bubble',
-  'sparkle',
-  'daisy',
-  'sprout',
-  'halo',
-  'round_glasses',
-  'star_glasses',
+  '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+  '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
+  '21', '22', '23', '24', '25', '26', '27', '28', '29', '30',
+  '31', '32', '33', '34', '35', '36', '37', '38', '39',
 ];
+
+const legacyDecorationIdMap = <String, String>{
+  'pink_bow': '1',
+  'red_headband': '2',
+  'blue_headband': '3',
+  'mint_headband': '4',
+  'heart_pair': '5',
+  'heart_bubble': '6',
+  'sparkle': '7',
+  'daisy': '8',
+  'sprout': '9',
+  'halo': '10',
+  'round_glasses': '11',
+  'star_glasses': '12',
+};
+
+String normalizeDecorationId(String raw) {
+  final value = raw.trim();
+  return legacyDecorationIdMap[value] ?? value;
+}
+
+List<String> sortDecorationIds(Iterable<String> ids) {
+  final result = ids.toList(growable: false);
+  result.sort(
+    (a, b) => (int.tryParse(a) ?? 9999).compareTo(int.tryParse(b) ?? 9999),
+  );
+  return result;
+}
 
 bool isKnownCardTemplate(String id) =>
     cardTemplateCatalog.any((template) => template.id == id);
@@ -83,7 +100,7 @@ class CardDecorationPlacement {
   factory CardDecorationPlacement.fromJson(Map<String, dynamic> json) {
     return CardDecorationPlacement(
       uid: json['uid']?.toString() ?? '',
-      assetId: json['asset_id']?.toString() ?? '',
+      assetId: normalizeDecorationId(json['asset_id']?.toString() ?? ''),
       x: ((json['x'] as num?)?.toDouble() ?? 0.78).clamp(0.0, 1.0).toDouble(),
       y: ((json['y'] as num?)?.toDouble() ?? 0.30).clamp(0.0, 1.0).toDouble(),
       scale: ((json['scale'] as num?)?.toDouble() ?? 1.0)
@@ -95,7 +112,7 @@ class CardDecorationPlacement {
 
   Map<String, dynamic> toJson() => {
         'uid': uid,
-        'asset_id': assetId,
+        'asset_id': normalizeDecorationId(assetId),
         'x': x,
         'y': y,
         'scale': scale,
@@ -120,7 +137,7 @@ class CardCustomizationService {
     final result = <String>{...defaultUnlockedDecorationIds};
     if (raw is List) {
       for (final value in raw) {
-        final id = value.toString();
+        final id = normalizeDecorationId(value.toString());
         if (allDecorationIds.contains(id)) result.add(id);
       }
     }
@@ -149,7 +166,10 @@ class CardCustomizationService {
         final placement = CardDecorationPlacement.fromJson(
           Map<String, dynamic>.from(item),
         );
-        if (placement.uid.isEmpty || placement.assetId.isEmpty) continue;
+        if (placement.uid.isEmpty ||
+            !allDecorationIds.contains(placement.assetId)) {
+          continue;
+        }
         parsed.add(placement);
         break;
       }
@@ -172,7 +192,7 @@ class CardCustomizationService {
     await _api.updateSettings({
       'card': {
         ...card,
-        'unlocked_decorations': unlocked.toList()..sort(),
+        'unlocked_decorations': sortDecorationIds(unlocked),
       },
     });
     unlockedDecorationIds.value = Set.unmodifiable(unlocked);
@@ -190,17 +210,19 @@ class CardCustomizationService {
         .take(1)
         .map(
           (item) => item.copyWith(
+            assetId: normalizeDecorationId(item.assetId),
             x: item.x.clamp(0.0, 1.0).toDouble(),
             y: item.y.clamp(0.0, 1.0).toDouble(),
             scale: item.scale.clamp(0.45, 2.2).toDouble(),
           ),
         )
+        .where((item) => allDecorationIds.contains(item.assetId))
         .toList(growable: false);
     await _api.updateSettings({
       'card': {
         'template_id': selectedTemplate,
         'decorations': normalized.map((item) => item.toJson()).toList(),
-        'unlocked_decorations': unlockedDecorationIds.value.toList()..sort(),
+        'unlocked_decorations': sortDecorationIds(unlockedDecorationIds.value),
       },
     });
     this.templateId.value = selectedTemplate;
@@ -208,7 +230,8 @@ class CardCustomizationService {
     return decorations.value;
   }
 
-  bool isDecorationUnlocked(String id) => unlockedDecorationIds.value.contains(id);
+  bool isDecorationUnlocked(String id) =>
+      unlockedDecorationIds.value.contains(normalizeDecorationId(id));
 
   void reset() {
     templateId.value = 'chiikawa_basic';
