@@ -73,7 +73,7 @@ class _AuthGateState extends State<_AuthGate> {
     _showPostLoginDialogs(attendance);
   }
 
-  Future<ExperienceReward?> _prepareUserSession() async {
+  Future<ExperienceReward?> _prepareUserSession({bool preserveLoginTheme = false}) async {
     await TtsService.instance.resetForSession();
     try {
       await StudyProgressService.instance.migrateLegacyLocalState();
@@ -81,7 +81,11 @@ class _AuthGateState extends State<_AuthGate> {
     try {
       await TtsService.instance.migrateLegacyLocalSettings();
     } catch (_) {}
-    await ThemeController.syncFromServer();
+    if (preserveLoginTheme) {
+      await ThemeController.syncCurrentToServer();
+    } else {
+      await ThemeController.syncFromServer();
+    }
     try {
       await ProfileService.instance.refresh();
     } catch (_) {
@@ -120,7 +124,7 @@ class _AuthGateState extends State<_AuthGate> {
 
   Future<void> _onAuthenticated() async {
     setState(() => _loading = true);
-    final attendance = await _prepareUserSession();
+    final attendance = await _prepareUserSession(preserveLoginTheme: true);
     if (!mounted) return;
     setState(() {
       _loading = false;
