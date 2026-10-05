@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/word.dart';
 import '../services/api_service.dart';
+import '../services/feedback_sound_service.dart';
 import '../services/study_progress_service.dart';
 import '../services/tts_service.dart';
 import '../theme/app_typography.dart';
@@ -268,6 +269,11 @@ class _StudyScreenState extends State<StudyScreen> {
       );
       final rounds = completion.rounds;
 
+      if (!widget.isFinal) {
+        try {
+          await FeedbackSoundService.instance.playYes();
+        } catch (_) {}
+      }
       if (!mounted) return;
       setState(() {
         _words = _words.map((word) => word.copyWith(known: false)).toList();
