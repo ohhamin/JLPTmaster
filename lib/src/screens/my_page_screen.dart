@@ -1,4 +1,8 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:gal/gal.dart';
 
 import '../services/card_customization_service.dart';
 import '../services/gamification_service.dart';
@@ -19,8 +23,10 @@ class MyPageScreen extends StatefulWidget {
 }
 
 class _MyPageScreenState extends State<MyPageScreen> {
+  final GlobalKey _downloadCardKey = GlobalKey();
   bool _loading = true;
   bool _loggingOut = false;
+  bool _downloading = false;
   LevelingStatus? _leveling;
   List<CardDecorationPlacement> _decorations = const [];
 
@@ -90,6 +96,40 @@ class _MyPageScreenState extends State<MyPageScreen> {
     );
   }
 
+  Future<void> _downloadCard() async {
+    if (_downloading || _loading) return;
+    setState(() => _downloading = true);
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      final renderObject = _downloadCardKey.currentContext?.findRenderObject();
+      if (renderObject is! RenderRepaintBoundary) {
+        throw Exception('카드를 이미지로 만들 준비가 되지 않았어요.');
+      }
+      final image = await renderObject.toImage(pixelRatio: 3.0);
+      try {
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (data == null) throw Exception('카드 이미지를 만들지 못했어요.');
+        await Gal.putImageBytes(
+          data.buffer.asUint8List(),
+          name: 'JLPTmaster_card_${DateTime.now().millisecondsSinceEpoch}',
+        );
+      } finally {
+        image.dispose();
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('카드 이미지를 갤러리에 저장했어요.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('카드 이미지 저장에 실패했어요. $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
   void _openLearningSettings() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -117,46 +157,63 @@ class _MyPageScreenState extends State<MyPageScreen> {
           onRefresh: _load,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 34),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 118),
             children: [
               Row(
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '나의 카드',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.6,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '카드 꾸밈 위에 최신 닉네임과 레벨 정보를 실시간으로 보여줘요.',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                        ),
-                      ],
+                    child: Text(
+                      '나의 카드',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.6,
+                          ),
                     ),
                   ),
-                  FilledButton.tonalIcon(
+                  OutlinedButton.icon(
                     onPressed: _loading ? null : () => _openCardEditor(displayName),
-                    icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      visualDensity: VisualDensity.compact,
+                      shape: const StadiumBorder(),
+                    ),
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 16),
                     label: const Text('꾸미기'),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton.filledTonal(
+                    tooltip: '카드 이미지 저장',
+                    onPressed: _downloading || _loading ? null : _downloadCard,
+                    visualDensity: VisualDensity.compact,
+                    icon: _downloading
+                        ? const SizedBox(
+                            width: 17,
+                            height: 17,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_rounded, size: 19),
                   ),
                 ],
               ),
+              const SizedBox(height: 5),
+              Text(
+                '카드 꾸밈 위에 최신 닉네임과 레벨 정보를 실시간으로 보여줘요.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
               const SizedBox(height: 16),
-              UserProfileCard(
-                nickname: displayName,
-                level: status?.level ?? 1,
-                experience: status?.experience ?? 0,
-                xpRequired: status?.xpRequired ?? 30,
-                loading: _loading,
-                decorations: _decorations,
+              RepaintBoundary(
+                key: _downloadCardKey,
+                child: UserProfileCard(
+                  nickname: displayName,
+                  level: status?.level ?? 1,
+                  experience: status?.experience ?? 0,
+                  xpRequired: status?.xpRequired ?? 30,
+                  loading: _loading,
+                  decorations: _decorations,
+                ),
               ),
               const SizedBox(height: 18),
               _MyPageCard(
