@@ -30,4 +30,7 @@ download "${ROOT}/pretendard/dist/public/static/Pretendard-Black.otf" "Pretendar
 # stays open and legible instead of inheriting the UI's bold weights.
 download "${ROOT}/pretendard-jp/dist/public/static/PretendardJP-Regular.otf" "PretendardJP-Regular.otf"
 
-echo "Pretendard fonts ready in ${DEST}"
+# HS유지체 is used only inside the customizable profile card.
+download "https://raw.githubusercontent.com/fonts-archive/HSYuji/main/HSYuji.otf" "HSYuji.otf"
+
+echo "JLPTmaster fonts ready in ${DEST}"
