@@ -103,6 +103,7 @@ class UserCardArtwork extends StatelessWidget {
           partCount,
           (index) => rootBundle.loadString(
             'assets/cards/$filePrefix.part-${index.toString().padLeft(2, '0')}',
+            cache: false,
           ),
         ),
       );
@@ -133,6 +134,7 @@ class UserCardArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Uint8List>(
+      key: ValueKey(templateId),
       future: _loadArtwork(templateId),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
