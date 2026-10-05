@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return AppSceneBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        extendBody: true,
+        extendBody: false,
         appBar: AppBar(
           centerTitle: true,
           backgroundColor: Colors.transparent,
@@ -45,22 +45,21 @@ class _HomeScreenState extends State<HomeScreen> {
             MyPageScreen(onLogout: widget.onLogout),
           ],
         ),
-        bottomNavigationBar: SafeArea(
-          top: false,
-          minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.14),
-                  blurRadius: 22,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
+        bottomNavigationBar: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.32 : 0.16),
+                blurRadius: 22,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+            child: SafeArea(
+              top: false,
               child: NavigationBar(
                 height: 72,
                 backgroundColor: isDark
