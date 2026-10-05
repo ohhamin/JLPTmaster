@@ -32,15 +32,15 @@ class TtsVoiceOption {
   String get koreanDescription {
     final lower = name.toLowerCase();
     final provider = lower.contains('samsung')
-        ? '삼성 음성 엔진'
+        ? '삼성'
         : lower.contains('google') || lower.contains('wavenet')
-            ? '구글 음성 엔진'
-            : '기기 음성 엔진';
+            ? '구글'
+            : '기기';
     final availability = lower.contains('network')
-        ? '인터넷 연결 시 사용'
+        ? '온라인'
         : lower.contains('local')
-            ? '오프라인 사용 가능'
-            : '기기 제공 음성';
+            ? '오프라인'
+            : '기본';
     final quality = lower.contains('wavenet') || lower.contains('neural')
         ? ' · 고음질'
         : '';
@@ -230,8 +230,6 @@ class TtsService {
     });
   }
 
-  /// Local prototype TTS values were only test data. The server is now the
-  /// single source of truth, so legacy values are deleted instead of uploaded.
   Future<void> migrateLegacyLocalSettings() async {
     final userId = SessionStore.userId;
     if (userId == null || userId.isEmpty) return;
