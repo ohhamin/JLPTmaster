@@ -2,15 +2,18 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    WORDS_JSON_PATH=/app/data/words.json
+    WORDS_JSON_PATH=/app/data/words.json \
+    CARD_IMAGE_ROOT=/app/data/cards \
+    DEFAULT_CARD_ASSET_ROOT=/app/card_assets
 
 WORKDIR /app
 
-COPY requirements.txt ./
+COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
-COPY data ./data
+COPY backend/app ./app
+COPY backend/data ./data
+COPY assets/cards ./card_assets
 
 EXPOSE 8000
 
