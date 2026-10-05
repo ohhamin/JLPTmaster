@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../services/gamification_service.dart';
+import '../services/profile_service.dart';
 import '../services/session_store.dart';
 import '../widgets/brand_mascot.dart';
+import '../widgets/nickname_dialog.dart';
 import 'settings_screen.dart';
 
 class MyPageScreen extends StatefulWidget {
@@ -26,23 +28,35 @@ class _MyPageScreenState extends State<MyPageScreen> {
   }
 
   Future<void> _load() async {
+    LevelingStatus? status;
     try {
-      final status = await GamificationService.instance.fetchStatus();
-      if (!mounted) return;
-      setState(() {
-        _leveling = status;
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-    }
+      status = await GamificationService.instance.fetchStatus();
+    } catch (_) {}
+    try {
+      await ProfileService.instance.refresh();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _leveling = status ?? _leveling;
+      _loading = false;
+    });
   }
 
   Future<void> _logout() async {
     if (_loggingOut) return;
     setState(() => _loggingOut = true);
     await widget.onLogout();
+  }
+
+  Future<void> _editNickname() async {
+    await NicknameDialog.show(
+      context,
+      requiredNickname: false,
+      initialValue: ProfileService.instance.nickname.value ?? '',
+      onSave: (nickname) async {
+        await ProfileService.instance.updateNickname(nickname);
+      },
+    );
   }
 
   void _showCardEditingComingSoon() {
@@ -70,109 +84,120 @@ class _MyPageScreenState extends State<MyPageScreen> {
     final scheme = Theme.of(context).colorScheme;
     final status = _leveling;
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 34),
-        children: [
-          Row(
+    return ValueListenableBuilder<String?>(
+      valueListenable: ProfileService.instance.nickname,
+      builder: (context, nickname, _) {
+        final displayName = nickname ?? '닉네임';
+        return RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 34),
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '나의 카드',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.6,
-                          ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '나의 카드',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.6,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '내 레벨과 꾸밈 요소가 담길 프로필 카드예요.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '내 레벨과 꾸밈 요소가 담길 프로필 카드예요.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: _showCardEditingComingSoon,
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                    label: const Text('꾸미기'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _UserCardPreview(
+                displayName: displayName,
+                status: status,
+                loading: _loading,
+              ),
+              const SizedBox(height: 18),
+              _MyPageCard(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: scheme.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(17),
+                      ),
+                      child: Icon(Icons.person_rounded, color: scheme.primary),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            displayName,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                ),
                           ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '로그인 ID · ${SessionStore.username ?? '-'}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  height: 1.35,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton(
+                      onPressed: _editNickname,
+                      child: const Text('수정하기'),
                     ),
                   ],
                 ),
               ),
-              FilledButton.tonalIcon(
-                onPressed: _showCardEditingComingSoon,
-                icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-                label: const Text('꾸미기'),
+              const SizedBox(height: 14),
+              _MyPageCard(
+                child: Column(
+                  children: [
+                    _MenuRow(
+                      icon: Icons.tune_rounded,
+                      title: '학습 설정',
+                      subtitle: 'TTS 음성, 속도, 음높이와 음량',
+                      onTap: _openLearningSettings,
+                    ),
+                    const Divider(height: 28),
+                    _MenuRow(
+                      icon: Icons.logout_rounded,
+                      title: _loggingOut ? '로그아웃 중...' : '로그아웃',
+                      subtitle: '현재 계정에서 로그아웃합니다.',
+                      onTap: _loggingOut ? null : _logout,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          _UserCardPreview(
-            displayName: '닉네임',
-            status: status,
-            loading: _loading,
-          ),
-          const SizedBox(height: 18),
-          _MyPageCard(
-            child: Row(
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: scheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(17),
-                  ),
-                  child: Icon(Icons.person_rounded, color: scheme.primary),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        SessionStore.username ?? '사용자',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '닉네임은 다음 단계에서 별도로 설정할 수 있게 연결합니다.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                              height: 1.35,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _MyPageCard(
-            child: Column(
-              children: [
-                _MenuRow(
-                  icon: Icons.tune_rounded,
-                  title: '학습 설정',
-                  subtitle: 'TTS 음성, 속도, 음높이와 음량',
-                  onTap: _openLearningSettings,
-                ),
-                const Divider(height: 28),
-                _MenuRow(
-                  icon: Icons.logout_rounded,
-                  title: _loggingOut ? '로그아웃 중...' : '로그아웃',
-                  subtitle: '현재 계정에서 로그아웃합니다.',
-                  onTap: _loggingOut ? null : _logout,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
