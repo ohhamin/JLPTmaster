@@ -17,6 +17,7 @@ class CardEditorScreen extends StatefulWidget {
     required this.level,
     required this.experience,
     required this.xpRequired,
+    required this.currentAttendanceStreak,
     required this.initialDecorations,
     this.initialTemplateId = 'chiikawa_basic',
   });
@@ -25,6 +26,7 @@ class CardEditorScreen extends StatefulWidget {
   final int level;
   final int experience;
   final int xpRequired;
+  final int currentAttendanceStreak;
   final List<CardDecorationPlacement> initialDecorations;
   final String initialTemplateId;
 
@@ -33,11 +35,14 @@ class CardEditorScreen extends StatefulWidget {
 }
 
 class _CardEditorScreenState extends State<CardEditorScreen> {
+  static const _itemsPerPage = 8;
+
   final GlobalKey _cardCaptureKey = GlobalKey();
   late List<CardDecorationPlacement> _items;
   late String _templateId;
   String? _selectedUid;
   bool _saving = false;
+  int _decorationPage = 0;
 
   @override
   void initState() {
@@ -117,6 +122,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
       );
       return;
     }
+
     final placement = CardDecorationPlacement(
       uid: '${DateTime.now().microsecondsSinceEpoch}_${definition.id}',
       assetId: definition.id,
@@ -143,6 +149,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
       _items.clear();
       _selectedUid = null;
       _templateId = 'chiikawa_basic';
+      _decorationPage = 0;
     });
   }
 
@@ -266,13 +273,169 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
     );
   }
 
+  Widget _decorationTile(
+    BuildContext context,
+    ColorScheme scheme,
+    Set<String> unlockedIds,
+    CardDecorationDefinition decoration,
+  ) {
+    final unlocked = unlockedIds.contains(decoration.id);
+    final selectedAsset = _items.isNotEmpty && _items.first.assetId == decoration.id;
+
+    return InkWell(
+      onTap: unlocked ? () => _add(decoration) : null,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(6, 6, 6, 5),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selectedAsset
+                ? scheme.primary
+                : scheme.outlineVariant.withValues(alpha: 0.8),
+            width: selectedAsset ? 2 : 1,
+          ),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Opacity(
+              opacity: unlocked ? 1 : 0.32,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: FittedBox(
+                      child: CardDecorationVisual(
+                        assetId: decoration.id,
+                        size: 64,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    decoration.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            if (!unlocked)
+              Center(
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: scheme.surface.withValues(alpha: 0.88),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.lock_rounded,
+                    size: 17,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _decorationPages(ColorScheme scheme, Set<String> unlockedIds) {
+    final pageCount = math.max(
+      1,
+      (cardDecorationCatalog.length + _itemsPerPage - 1) ~/ _itemsPerPage,
+    );
+
+    return Column(
+      children: [
+        Expanded(
+          child: PageView.builder(
+            itemCount: pageCount,
+            onPageChanged: (page) => setState(() => _decorationPage = page),
+            itemBuilder: (context, page) {
+              final start = page * _itemsPerPage;
+              final count = math.min(
+                _itemsPerPage,
+                cardDecorationCatalog.length - start,
+              );
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  const columns = 4;
+                  const rows = 2;
+                  const gap = 8.0;
+                  final tileWidth =
+                      (constraints.maxWidth - gap * (columns - 1)) / columns;
+                  final tileHeight =
+                      (constraints.maxHeight - gap * (rows - 1)) / rows;
+                  final ratio = tileHeight <= 0 ? 1.0 : tileWidth / tileHeight;
+
+                  return GridView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: EdgeInsets.zero,
+                    itemCount: count,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      mainAxisSpacing: gap,
+                      crossAxisSpacing: gap,
+                      childAspectRatio: ratio,
+                    ),
+                    itemBuilder: (context, index) {
+                      final decoration = cardDecorationCatalog[start + index];
+                      return _decorationTile(
+                        context,
+                        scheme,
+                        unlockedIds,
+                        decoration,
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        if (pageCount > 1) ...[
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(pageCount, (index) {
+              final active = index == _decorationPage;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: active ? 18 : 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: active
+                      ? scheme.primary
+                      : scheme.outlineVariant.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final selected = _selected;
-    final selectedDefinition =
-        selected == null ? null : _definition(selected.assetId);
+    final selectedDefinition = selected == null ? null : _definition(selected.assetId);
     final unlockedIds = CardCustomizationService.instance.unlockedDecorationIds.value;
+    final pageCount = math.max(
+      1,
+      (cardDecorationCatalog.length + _itemsPerPage - 1) ~/ _itemsPerPage,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -320,6 +483,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                         level: widget.level,
                         experience: widget.experience,
                         xpRequired: widget.xpRequired,
+                        currentAttendanceStreak: widget.currentAttendanceStreak,
                         templateId: _templateId,
                       ),
                     ),
@@ -361,8 +525,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                         value: selected.scale,
                         min: 0.45,
                         max: 2.2,
-                        onChanged: (value) =>
-                            _replace(selected.copyWith(scale: value)),
+                        onChanged: (value) => _replace(selected.copyWith(scale: value)),
                       ),
                       _EditorSlider(
                         label: '회전',
@@ -370,8 +533,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                         value: selected.rotation.clamp(-180, 180).toDouble(),
                         min: -180,
                         max: 180,
-                        onChanged: (value) =>
-                            _replace(selected.copyWith(rotation: value)),
+                        onChanged: (value) => _replace(selected.copyWith(rotation: value)),
                       ),
                     ],
                   ),
@@ -388,7 +550,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                   ),
                   const Spacer(),
                   Text(
-                    '${unlockedIds.length}/${cardDecorationCatalog.length} 해금',
+                    '${unlockedIds.length}/${cardDecorationCatalog.length} 해금 · ${_decorationPage + 1}/$pageCount',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           color: scheme.onSurfaceVariant,
                           fontWeight: FontWeight.w800,
@@ -397,106 +559,7 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
                 ],
               ),
               const SizedBox(height: 7),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    const columns = 4;
-                    const gap = 8.0;
-                    final rows =
-                        (cardDecorationCatalog.length / columns).ceil();
-                    final tileWidth =
-                        (constraints.maxWidth - gap * (columns - 1)) / columns;
-                    final tileHeight =
-                        (constraints.maxHeight - gap * (rows - 1)) / rows;
-                    final ratio = tileHeight <= 0 ? 1.0 : tileWidth / tileHeight;
-
-                    return GridView.builder(
-                      physics: const NeverScrollableScrollPhysics(),
-                      padding: EdgeInsets.zero,
-                      itemCount: cardDecorationCatalog.length,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        mainAxisSpacing: gap,
-                        crossAxisSpacing: gap,
-                        childAspectRatio: ratio,
-                      ),
-                      itemBuilder: (context, index) {
-                        final decoration = cardDecorationCatalog[index];
-                        final unlocked = unlockedIds.contains(decoration.id);
-                        final selectedAsset = _items.isNotEmpty &&
-                            _items.first.assetId == decoration.id;
-                        return InkWell(
-                          onTap: unlocked ? () => _add(decoration) : null,
-                          borderRadius: BorderRadius.circular(14),
-                          child: Container(
-                            padding: const EdgeInsets.fromLTRB(6, 6, 6, 5),
-                            decoration: BoxDecoration(
-                              color: scheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: selectedAsset
-                                    ? scheme.primary
-                                    : scheme.outlineVariant
-                                        .withValues(alpha: 0.8),
-                                width: selectedAsset ? 2 : 1,
-                              ),
-                            ),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                Opacity(
-                                  opacity: unlocked ? 1 : 0.32,
-                                  child: Column(
-                                    children: [
-                                      Expanded(
-                                        child: FittedBox(
-                                          child: CardDecorationVisual(
-                                            assetId: decoration.id,
-                                            size: 64,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        decoration.label,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (!unlocked)
-                                  Center(
-                                    child: Container(
-                                      width: 30,
-                                      height: 30,
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: scheme.surface.withValues(alpha: 0.88),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.lock_rounded,
-                                        size: 17,
-                                        color: scheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
+              Expanded(child: _decorationPages(scheme, unlockedIds)),
             ],
           ),
         ),
