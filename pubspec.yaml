@@ -24,6 +24,7 @@ flutter:
     - assets/branding/app_icon.part-00
     - assets/branding/app_icon.part-01
     - assets/branding/app_icon.part-02
+    - assets/cards/
     - assets/scenes/meadow_light.webp
     - assets/scenes/cave_dark.webp
   fonts:
@@ -44,4 +45,8 @@ flutter:
     - family: PretendardJP
       fonts:
         - asset: assets/fonts/PretendardJP-Regular.otf
+          weight: 400
+    - family: HSYuji
+      fonts:
+        - asset: assets/fonts/HSYuji.otf
           weight: 400
