@@ -785,13 +785,6 @@ class _ProgressHeader extends StatelessWidget {
                   ),
             ),
             const Spacer(),
-            Text(
-              '$remaining개 학습 중',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
           ],
         ),
         const SizedBox(height: 9),
