@@ -211,6 +211,12 @@ class FinalKnownUpdate(BaseModel):
     word_ids: list[str] = Field(default_factory=list, max_length=10000)
 
 
+class StudyCursorUpdate(BaseModel):
+    level: JlptLevel
+    chapter: int = Field(ge=0)
+    word_id: str | None = Field(default=None, max_length=200)
+
+
 class SettingsUpdate(BaseModel):
     settings: dict[str, Any]
 
@@ -546,6 +552,30 @@ def set_final_known(
     ids = {str(item) for item in payload.word_ids if str(item).strip()}
     user_data.set_final_known(str(user['id']), payload.level, ids)
     return {'level': payload.level, 'word_ids': sorted(ids)}
+
+
+@app.get('/api/progress/cursor')
+def get_study_cursor(
+    level: JlptLevel,
+    chapter: int = Query(ge=0),
+    user: dict = Depends(current_user),
+) -> dict:
+    word_id = user_data.study_cursor(str(user['id']), level, chapter)
+    return {'level': level, 'chapter': chapter, 'word_id': word_id}
+
+
+@app.put('/api/progress/cursor')
+def set_study_cursor(
+    payload: StudyCursorUpdate,
+    user: dict = Depends(current_user),
+) -> dict:
+    word_id = user_data.set_study_cursor(
+        str(user['id']),
+        payload.level,
+        payload.chapter,
+        payload.word_id,
+    )
+    return {'level': payload.level, 'chapter': payload.chapter, 'word_id': word_id}
 
 
 @app.get('/api/settings')
