@@ -295,10 +295,15 @@ class UserDataStore:
                 return {
                     'word_id': value or None,
                     'remaining_word_ids': [],
+                    'queue_initialized': False,
                 }
 
             if not isinstance(raw, dict):
-                return {'word_id': None, 'remaining_word_ids': []}
+                return {
+                    'word_id': None,
+                    'remaining_word_ids': [],
+                    'queue_initialized': False,
+                }
 
             word_id = str(raw.get('word_id') or '').strip() or None
             remaining: list[str] = []
@@ -312,6 +317,7 @@ class UserDataStore:
             return {
                 'word_id': word_id,
                 'remaining_word_ids': remaining,
+                'queue_initialized': bool(raw.get('queue_initialized', True)),
             }
 
     def set_study_cursor_state(
@@ -343,11 +349,13 @@ class UserDataStore:
                 data[key] = {
                     'word_id': current,
                     'remaining_word_ids': remaining,
+                    'queue_initialized': True,
                 }
             self._write_json(path, data)
             return {
                 'word_id': current,
                 'remaining_word_ids': remaining,
+                'queue_initialized': True,
             }
 
     def study_cursor(self, user_id: str, level: str, chapter: int) -> str | None:
