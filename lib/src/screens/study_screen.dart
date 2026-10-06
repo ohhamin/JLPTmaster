@@ -288,24 +288,27 @@ class _StudyScreenState extends State<StudyScreen> {
   Future<void> _markKnown() async {
     if (_queue.isEmpty || _completingRound) return;
     final current = _current;
+    final previousQueue = List<String>.from(_queue);
     _tts.stop();
 
-    final nextQueue = _queue.skip(1).toList();
-    final finished = nextQueue.isEmpty;
+    final updatedWords = _words
+        .map(
+          (word) => word.id == current.id ? word.copyWith(known: true) : word,
+        )
+        .toList(growable: false);
+    final unknownIds =
+        updatedWords.where((word) => !word.known).map((word) => word.id).toList();
+    final finished = unknownIds.isEmpty;
+    final nextQueue =
+        finished ? const <String>[] : _advanceQueue(previousQueue, unknownIds);
 
     setState(() {
-      // Hide reveal content before rendering the next word.
       _showReading = false;
       _showMeaning = false;
-      _replaceWord(current.copyWith(known: true));
+      _words = updatedWords;
       _queue = nextQueue;
       if (finished) _completingRound = true;
     });
-
-    if (current.known) {
-      if (finished) await _completeRound();
-      return;
-    }
 
     try {
       await _persistKnown(current, true);
@@ -316,9 +319,7 @@ class _StudyScreenState extends State<StudyScreen> {
       }
       setState(() {
         _replaceWord(current);
-        if (!_queue.contains(current.id)) {
-          _queue = [..._queue, current.id];
-        }
+        _queue = previousQueue;
         _completingRound = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -327,12 +328,10 @@ class _StudyScreenState extends State<StudyScreen> {
       return;
     }
 
-    if (!finished) {
-      await _saveCursor(nextQueue.first);
-    }
-
     if (finished) {
       await _completeRound();
+    } else {
+      await _saveStudyQueue();
     }
   }
 
