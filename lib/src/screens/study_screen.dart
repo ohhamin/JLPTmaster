@@ -548,20 +548,6 @@ class _StudyScreenState extends State<StudyScreen> {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: scheme.primary.withValues(alpha: 0.11),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              '${_queue.length}개 남음',
-                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                    color: scheme.primary,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                            ),
-                          ),
                           const Spacer(),
                           IconButton(
                             tooltip: current.favorite ? '즐겨찾기 해제' : '즐겨찾기 추가',
