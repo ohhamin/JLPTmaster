@@ -253,6 +253,42 @@ class ApiService {
     _ensureOk(response, '전체 복습 상태를 저장하지 못했습니다.');
   }
 
+  Future<String?> fetchStudyCursor(String level, int chapter) async {
+    final uri = Uri.parse('$baseUrl/api/progress/cursor').replace(
+      queryParameters: {
+        'level': level,
+        'chapter': chapter.toString(),
+      },
+    );
+    final response = await _client
+        .get(uri, headers: SessionStore.headers())
+        .timeout(const Duration(seconds: 8));
+    _ensureOk(response, '학습 위치를 불러오지 못했습니다.');
+    final decoded =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    final value = decoded['word_id']?.toString().trim();
+    return value == null || value.isEmpty || value == 'null' ? null : value;
+  }
+
+  Future<void> setStudyCursor(
+    String level,
+    int chapter,
+    String? wordId,
+  ) async {
+    final response = await _client
+        .put(
+          Uri.parse('$baseUrl/api/progress/cursor'),
+          headers: SessionStore.headers(json: true),
+          body: jsonEncode({
+            'level': level,
+            'chapter': chapter,
+            'word_id': wordId,
+          }),
+        )
+        .timeout(const Duration(seconds: 8));
+    _ensureOk(response, '학습 위치를 저장하지 못했습니다.');
+  }
+
   Future<Map<String, dynamic>> fetchSettings() async {
     final response = await _client
         .get(Uri.parse('$baseUrl/api/settings'), headers: SessionStore.headers())
