@@ -259,18 +259,16 @@ class _StudyScreenState extends State<StudyScreen> {
     if (_queue.isEmpty || _completingRound) return;
     _tts.stop();
 
-    String? nextWordId;
+    final unknownIds =
+        _words.where((word) => !word.known).map((word) => word.id);
+    final nextQueue = _advanceQueue(_queue, unknownIds);
+
     setState(() {
-      // Hide reveal content in the same frame as the word swap.
       _showReading = false;
       _showMeaning = false;
-      if (_queue.length > 1) {
-        final currentId = _queue.first;
-        _queue = [..._queue.skip(1), currentId];
-      }
-      nextWordId = _queue.isEmpty ? null : _queue.first;
+      _queue = nextQueue;
     });
-    await _saveCursor(nextWordId);
+    await _saveStudyQueue();
   }
 
   Future<void> _persistKnown(Word word, bool known) async {
