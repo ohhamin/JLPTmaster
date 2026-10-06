@@ -11,10 +11,12 @@ class StudyCursorState {
   const StudyCursorState({
     required this.wordId,
     required this.remainingWordIds,
+    required this.queueInitialized,
   });
 
   final String? wordId;
   final List<String> remainingWordIds;
+  final bool queueInitialized;
 
   factory StudyCursorState.fromJson(Map<String, dynamic> json) {
     final rawWordId = json['word_id']?.toString().trim();
@@ -26,6 +28,7 @@ class StudyCursorState {
           .map((item) => item.toString())
           .where((item) => item.isNotEmpty)
           .toList(growable: false),
+      queueInitialized: json['queue_initialized'] == true,
     );
   }
 }
