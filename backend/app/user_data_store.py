@@ -121,6 +121,7 @@ class UserDataStore:
                 'known.json': {'chapters': {}, 'final': {}},
                 'favorites.json': {'word_ids': []},
                 'rounds.json': {},
+                'study_positions.json': {},
                 'settings.json': {
                     'card': {
                         'unlocked_decorations': list(DEFAULT_CARD_DECORATION_IDS),
@@ -282,6 +283,34 @@ class UserDataStore:
             data[key] = next_value
             self._write_json(path, data)
             return next_value
+
+    def study_cursor(self, user_id: str, level: str, chapter: int) -> str | None:
+        with self._lock:
+            data = self._read_json(self._path(user_id, 'study_positions.json'), {})
+            value = data.get(self._chapter_key(level, chapter))
+            if value is None:
+                return None
+            value = str(value).strip()
+            return value or None
+
+    def set_study_cursor(
+        self,
+        user_id: str,
+        level: str,
+        chapter: int,
+        word_id: str | None,
+    ) -> str | None:
+        with self._lock:
+            path = self._path(user_id, 'study_positions.json')
+            data = self._read_json(path, {})
+            key = self._chapter_key(level, chapter)
+            value = str(word_id or '').strip()
+            if value:
+                data[key] = value
+            else:
+                data.pop(key, None)
+            self._write_json(path, data)
+            return value or None
 
     def settings(self, user_id: str) -> dict:
         with self._lock:
