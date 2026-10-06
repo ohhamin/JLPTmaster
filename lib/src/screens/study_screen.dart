@@ -43,7 +43,6 @@ class _StudyScreenState extends State<StudyScreen> {
   bool _savingFavorite = false;
   bool _completingRound = false;
   bool _completionInFlight = false;
-  bool _advancingWord = false;
   String? _error;
 
   @override
@@ -174,25 +173,6 @@ class _StudyScreenState extends State<StudyScreen> {
     });
   }
 
-  Future<void> _hideRevealBeforeAdvance() async {
-    if (!_showReading && !_showMeaning) return;
-
-    setState(() {
-      _advancingWord = true;
-      _showReading = false;
-      _showMeaning = false;
-    });
-
-    // Let the reveal fade-out finish before swapping the current word.
-    await Future<void>.delayed(const Duration(milliseconds: 150));
-    if (!mounted) return;
-  }
-
-  void _finishAdvance() {
-    if (!mounted || !_advancingWord) return;
-    setState(() => _advancingWord = false);
-  }
-
   void _replaceWord(Word updated) {
     final index = _words.indexWhere((word) => word.id == updated.id);
     if (index < 0) return;
@@ -228,27 +208,19 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   Future<void> _studyAgain() async {
-    if (_queue.isEmpty || _completingRound || _advancingWord) return;
+    if (_queue.isEmpty || _completingRound) return;
     _tts.stop();
-
-    final hadReveal = _showReading || _showMeaning;
-    if (hadReveal) {
-      await _hideRevealBeforeAdvance();
-      if (!mounted) return;
-    } else {
-      setState(() => _advancingWord = true);
-    }
 
     String? nextWordId;
     setState(() {
+      // Hide reveal content in the same frame as the word swap.
+      _showReading = false;
+      _showMeaning = false;
       if (_queue.length > 1) {
         final currentId = _queue.first;
         _queue = [..._queue.skip(1), currentId];
       }
       nextWordId = _queue.isEmpty ? null : _queue.first;
-      _showReading = false;
-      _showMeaning = false;
-      _advancingWord = false;
     });
     await _saveCursor(nextWordId);
   }
@@ -268,27 +240,19 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   Future<void> _markKnown() async {
-    if (_queue.isEmpty || _completingRound || _advancingWord) return;
+    if (_queue.isEmpty || _completingRound) return;
     final current = _current;
     _tts.stop();
-
-    final hadReveal = _showReading || _showMeaning;
-    if (hadReveal) {
-      await _hideRevealBeforeAdvance();
-      if (!mounted) return;
-    } else {
-      setState(() => _advancingWord = true);
-    }
 
     final nextQueue = _queue.skip(1).toList();
     final finished = nextQueue.isEmpty;
 
     setState(() {
-      _replaceWord(current.copyWith(known: true));
-      _queue = nextQueue;
+      // Hide reveal content before rendering the next word.
       _showReading = false;
       _showMeaning = false;
-      _advancingWord = false;
+      _replaceWord(current.copyWith(known: true));
+      _queue = nextQueue;
       if (finished) _completingRound = true;
     });
 
@@ -554,9 +518,8 @@ class _StudyScreenState extends State<StudyScreen> {
                           child: Column(
                             children: [
                               if (current.reading.isNotEmpty) ...[
-                                AnimatedOpacity(
+                                Opacity(
                                   opacity: _showReading ? 1 : 0,
-                                  duration: const Duration(milliseconds: 140),
                                   child: Text(
                                     current.reading,
                                     textAlign: TextAlign.center,
@@ -593,9 +556,8 @@ class _StudyScreenState extends State<StudyScreen> {
                               ),
                               if (current.meaningKo.isNotEmpty) ...[
                                 const SizedBox(height: 12),
-                                AnimatedOpacity(
+                                Opacity(
                                   opacity: _showMeaning ? 1 : 0,
-                                  duration: const Duration(milliseconds: 140),
                                   child: Text(
                                     current.meaningKo,
                                     textAlign: TextAlign.center,
@@ -647,9 +609,8 @@ class _StudyScreenState extends State<StudyScreen> {
                               ),
                               if (current.exampleReading.isNotEmpty) ...[
                                 const SizedBox(height: 10),
-                                AnimatedOpacity(
+                                Opacity(
                                   opacity: _showReading ? 1 : 0,
-                                  duration: const Duration(milliseconds: 140),
                                   child: Align(
                                     alignment: Alignment.centerLeft,
                                     child: Text(
@@ -666,9 +627,8 @@ class _StudyScreenState extends State<StudyScreen> {
                               ],
                               if (current.exampleKo.isNotEmpty) ...[
                                 const SizedBox(height: 10),
-                                AnimatedOpacity(
+                                Opacity(
                                   opacity: _showMeaning ? 1 : 0,
-                                  duration: const Duration(milliseconds: 140),
                                   child: Align(
                                     alignment: Alignment.centerLeft,
                                     child: Text(
@@ -705,7 +665,7 @@ class _StudyScreenState extends State<StudyScreen> {
                   child: SizedBox(
                     height: 60,
                     child: OutlinedButton.icon(
-                      onPressed: _completingRound || _advancingWord ? null : _studyAgain,
+                      onPressed: _completingRound ? null : _studyAgain,
                       icon: const Icon(Icons.replay_rounded, size: 20),
                       label: const Text(
                         '다시 학습',
@@ -719,7 +679,7 @@ class _StudyScreenState extends State<StudyScreen> {
                   child: SizedBox(
                     height: 60,
                     child: FilledButton.icon(
-                      onPressed: _completingRound || _advancingWord ? null : _markKnown,
+                      onPressed: _completingRound ? null : _markKnown,
                       icon: const Icon(Icons.check_rounded, size: 20),
                       label: const Text(
                         '알고 있음',
