@@ -367,14 +367,23 @@ class _StudyScreenState extends State<StudyScreen> {
         } catch (_) {}
       }
       if (!mounted) return;
+      final resetWords =
+          _words.map((word) => word.copyWith(known: false)).toList();
+      final resetQueue = _buildQueueFromState(
+        resetWords,
+        const StudyCursorState(
+          wordId: null,
+          remainingWordIds: [],
+        ),
+      );
       setState(() {
-        _words = _words.map((word) => word.copyWith(known: false)).toList();
-        _queue = _words.map((word) => word.id).toList();
+        _words = resetWords;
+        _queue = resetQueue;
         _showReading = false;
         _showMeaning = false;
         _completingRound = false;
       });
-      await _saveCursor(_queue.isEmpty ? null : _queue.first);
+      await _saveStudyQueue();
 
       final leave = await _showCompletionDialog(
         rounds,
