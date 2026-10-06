@@ -76,10 +76,11 @@ class _StudyScreenState extends State<StudyScreen> {
     if (unknownIds.isEmpty) return const [];
 
     final unknownSet = unknownIds.toSet();
-    var currentId = saved.wordId;
-    if (currentId == null || !unknownSet.contains(currentId)) {
-      currentId = unknownIds[_random.nextInt(unknownIds.length)];
-    }
+    final savedCurrentIsValid =
+        saved.wordId != null && unknownSet.contains(saved.wordId);
+    final currentId = savedCurrentIsValid
+        ? saved.wordId!
+        : unknownIds[_random.nextInt(unknownIds.length)];
 
     final remaining = <String>[];
     final seen = <String>{currentId};
@@ -89,9 +90,14 @@ class _StudyScreenState extends State<StudyScreen> {
       }
     }
 
-    final missing = unknownIds.where((id) => !seen.contains(id)).toList()
-      ..shuffle(_random);
-    remaining.addAll(missing);
+    if (!savedCurrentIsValid || !saved.queueInitialized) {
+      final missing = unknownIds.where((id) => !seen.contains(id)).toList()
+        ..shuffle(_random);
+      remaining.addAll(missing);
+    } else if (remaining.isEmpty && unknownSet.length > 1) {
+      remaining.addAll(_refillRemaining(currentId, unknownSet));
+    }
+
     return [currentId, ...remaining];
   }
 
@@ -374,6 +380,7 @@ class _StudyScreenState extends State<StudyScreen> {
         const StudyCursorState(
           wordId: null,
           remainingWordIds: [],
+          queueInitialized: false,
         ),
       );
       setState(() {
