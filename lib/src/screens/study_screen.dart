@@ -64,6 +64,42 @@ class _StudyScreenState extends State<StudyScreen> {
     return _words.firstWhere((word) => word.id == currentId);
   }
 
+  List<String> _queueFromCursor(List<Word> words, String? cursor) {
+    final remaining = words
+        .where((word) => !word.known)
+        .map((word) => word.id)
+        .toList(growable: false);
+    if (remaining.isEmpty || cursor == null || cursor.isEmpty) return remaining;
+
+    final exactIndex = remaining.indexOf(cursor);
+    if (exactIndex >= 0) {
+      return [...remaining.skip(exactIndex), ...remaining.take(exactIndex)];
+    }
+
+    final originalIndex = words.indexWhere((word) => word.id == cursor);
+    if (originalIndex < 0) return remaining;
+
+    for (var offset = 0; offset < words.length; offset++) {
+      final candidate = words[(originalIndex + offset) % words.length].id;
+      final remainingIndex = remaining.indexOf(candidate);
+      if (remainingIndex >= 0) {
+        return [
+          ...remaining.skip(remainingIndex),
+          ...remaining.take(remainingIndex),
+        ];
+      }
+    }
+    return remaining;
+  }
+
+  Future<void> _saveCursor(String? wordId) async {
+    try {
+      await _api.setStudyCursor(widget.level, widget.chapter, wordId);
+    } catch (_) {
+      // The word state remains authoritative; cursor save can retry on the next move.
+    }
+  }
+
   Future<void> _speakJapanese(String text) async {
     try {
       await _tts.speakJapanese(text);
@@ -104,7 +140,8 @@ class _StudyScreenState extends State<StudyScreen> {
         );
       }
 
-      final queue = words.where((word) => !word.known).map((word) => word.id).toList();
+      final cursor = await _api.fetchStudyCursor(widget.level, widget.chapter);
+      final queue = _queueFromCursor(words, cursor);
 
       if (!mounted) return;
       setState(() {
@@ -170,17 +207,20 @@ class _StudyScreenState extends State<StudyScreen> {
     }
   }
 
-  void _studyAgain() {
+  Future<void> _studyAgain() async {
     if (_queue.isEmpty || _completingRound) return;
     _tts.stop();
+    String? nextWordId;
     setState(() {
       if (_queue.length > 1) {
         final currentId = _queue.first;
         _queue = [..._queue.skip(1), currentId];
       }
+      nextWordId = _queue.isEmpty ? null : _queue.first;
       _showReading = false;
       _showMeaning = false;
     });
+    await _saveCursor(nextWordId);
   }
 
   Future<void> _persistKnown(Word word, bool known) async {
@@ -238,6 +278,10 @@ class _StudyScreenState extends State<StudyScreen> {
       return;
     }
 
+    if (!finished) {
+      await _saveCursor(nextQueue.first);
+    }
+
     if (finished) {
       await _completeRound();
     }
@@ -282,6 +326,7 @@ class _StudyScreenState extends State<StudyScreen> {
         _showMeaning = false;
         _completingRound = false;
       });
+      await _saveCursor(_queue.isEmpty ? null : _queue.first);
 
       final leave = await _showCompletionDialog(
         rounds,
