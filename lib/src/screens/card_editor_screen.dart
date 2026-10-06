@@ -304,29 +304,37 @@ class _CardEditorScreenState extends State<CardEditorScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Opacity(
-              opacity: unlocked ? 1 : 0.32,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: FittedBox(
-                      child: CardDecorationVisual(
-                        assetId: decoration.id,
-                        size: 64,
+            Column(
+              children: [
+                Expanded(
+                  child: FittedBox(
+                    child: unlocked
+                        ? CardDecorationVisual(
+                            assetId: decoration.id,
+                            size: 64,
+                          )
+                        : ColorFiltered(
+                            colorFilter: const ColorFilter.mode(
+                              Colors.black,
+                              BlendMode.srcIn,
+                            ),
+                            child: CardDecorationVisual(
+                              assetId: decoration.id,
+                              size: 64,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  unlocked ? decoration.label : '???',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    decoration.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
             if (!unlocked)
               Center(
