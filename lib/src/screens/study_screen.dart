@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/word.dart';
@@ -32,6 +34,7 @@ class _StudyScreenState extends State<StudyScreen> {
   final ApiService _api = ApiService();
   final TtsService _tts = TtsService.instance;
   final StudyProgressService _progress = StudyProgressService.instance;
+  final math.Random _random = math.Random();
 
   List<Word> _words = const [];
   List<String> _queue = const [];
@@ -64,40 +67,83 @@ class _StudyScreenState extends State<StudyScreen> {
     return _words.firstWhere((word) => word.id == currentId);
   }
 
-  List<String> _queueFromCursor(List<Word> words, String? cursor) {
-    final remaining = words
-        .where((word) => !word.known)
-        .map((word) => word.id)
-        .toList(growable: false);
-    if (remaining.isEmpty || cursor == null || cursor.isEmpty) return remaining;
+  List<String> _buildQueueFromState(
+    List<Word> words,
+    StudyCursorState saved,
+  ) {
+    final unknownIds =
+        words.where((word) => !word.known).map((word) => word.id).toList();
+    if (unknownIds.isEmpty) return const [];
 
-    final exactIndex = remaining.indexOf(cursor);
-    if (exactIndex >= 0) {
-      return [...remaining.skip(exactIndex), ...remaining.take(exactIndex)];
+    final unknownSet = unknownIds.toSet();
+    var currentId = saved.wordId;
+    if (currentId == null || !unknownSet.contains(currentId)) {
+      currentId = unknownIds[_random.nextInt(unknownIds.length)];
     }
 
-    final originalIndex = words.indexWhere((word) => word.id == cursor);
-    if (originalIndex < 0) return remaining;
-
-    for (var offset = 0; offset < words.length; offset++) {
-      final candidate = words[(originalIndex + offset) % words.length].id;
-      final remainingIndex = remaining.indexOf(candidate);
-      if (remainingIndex >= 0) {
-        return [
-          ...remaining.skip(remainingIndex),
-          ...remaining.take(remainingIndex),
-        ];
+    final remaining = <String>[];
+    final seen = <String>{currentId};
+    for (final id in saved.remainingWordIds) {
+      if (unknownSet.contains(id) && seen.add(id)) {
+        remaining.add(id);
       }
     }
-    return remaining;
+
+    final missing = unknownIds.where((id) => !seen.contains(id)).toList()
+      ..shuffle(_random);
+    remaining.addAll(missing);
+    return [currentId, ...remaining];
   }
 
-  Future<void> _saveCursor(String? wordId) async {
-    try {
-      await _api.setStudyCursor(widget.level, widget.chapter, wordId);
-    } catch (_) {
-      // The word state remains authoritative; cursor save can retry on the next move.
+  List<String> _refillRemaining(
+    String currentId,
+    Iterable<String> unknownIds,
+  ) {
+    final result = unknownIds.where((id) => id != currentId).toList()
+      ..shuffle(_random);
+    return result;
+  }
+
+  List<String> _advanceQueue(
+    List<String> queue,
+    Iterable<String> unknownIds,
+  ) {
+    final unknownSet = unknownIds.toSet();
+    final remaining =
+        queue.skip(1).where(unknownSet.contains).toList(growable: true);
+
+    if (remaining.isEmpty) {
+      final previousId = queue.isEmpty ? null : queue.first;
+      final candidates =
+          unknownSet.where((id) => id != previousId).toList(growable: true);
+      if (candidates.isEmpty) {
+        return previousId == null ? const [] : [previousId];
+      }
+      candidates.shuffle(_random);
+      final nextId = candidates.first;
+      return [nextId, ..._refillRemaining(nextId, unknownSet)];
     }
+
+    final nextId = remaining.removeAt(0);
+    if (remaining.isEmpty) {
+      remaining.addAll(_refillRemaining(nextId, unknownSet));
+    }
+    return [nextId, ...remaining];
+  }
+
+  Future<void> _saveStudyQueue() async {
+    final currentId = _queue.isEmpty ? null : _queue.first;
+    final remaining = _queue.length <= 1
+        ? const <String>[]
+        : _queue.skip(1).toList(growable: false);
+    try {
+      await _api.setStudyCursor(
+        widget.level,
+        widget.chapter,
+        currentId,
+        remainingWordIds: remaining,
+      );
+    } catch (_) {}
   }
 
   Future<void> _speakJapanese(String text) async {
