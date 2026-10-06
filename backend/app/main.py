@@ -215,6 +215,7 @@ class StudyCursorUpdate(BaseModel):
     level: JlptLevel
     chapter: int = Field(ge=0)
     word_id: str | None = Field(default=None, max_length=200)
+    remaining_word_ids: list[str] = Field(default_factory=list, max_length=10000)
 
 
 class SettingsUpdate(BaseModel):
@@ -560,8 +561,12 @@ def get_study_cursor(
     chapter: int = Query(ge=0),
     user: dict = Depends(current_user),
 ) -> dict:
-    word_id = user_data.study_cursor(str(user['id']), level, chapter)
-    return {'level': level, 'chapter': chapter, 'word_id': word_id}
+    state = user_data.study_cursor_state(str(user['id']), level, chapter)
+    return {
+        'level': level,
+        'chapter': chapter,
+        **state,
+    }
 
 
 @app.put('/api/progress/cursor')
@@ -569,13 +574,18 @@ def set_study_cursor(
     payload: StudyCursorUpdate,
     user: dict = Depends(current_user),
 ) -> dict:
-    word_id = user_data.set_study_cursor(
+    state = user_data.set_study_cursor_state(
         str(user['id']),
         payload.level,
         payload.chapter,
         payload.word_id,
+        payload.remaining_word_ids,
     )
-    return {'level': payload.level, 'chapter': payload.chapter, 'word_id': word_id}
+    return {
+        'level': payload.level,
+        'chapter': payload.chapter,
+        **state,
+    }
 
 
 @app.get('/api/settings')
