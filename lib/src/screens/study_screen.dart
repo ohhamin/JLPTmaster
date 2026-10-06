@@ -186,8 +186,8 @@ class _StudyScreenState extends State<StudyScreen> {
         );
       }
 
-      final cursor = await _api.fetchStudyCursor(widget.level, widget.chapter);
-      final queue = _queueFromCursor(words, cursor);
+      final saved = await _api.fetchStudyCursor(widget.level, widget.chapter);
+      final queue = _buildQueueFromState(words, saved);
 
       if (!mounted) return;
       setState(() {
@@ -201,6 +201,8 @@ class _StudyScreenState extends State<StudyScreen> {
 
       if (words.isNotEmpty && queue.isEmpty) {
         await _completeRound();
+      } else if (queue.isNotEmpty) {
+        await _saveStudyQueue();
       }
     } catch (error) {
       if (!mounted) return;
