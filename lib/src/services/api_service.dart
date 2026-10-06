@@ -7,6 +7,29 @@ import '../models/study_summary.dart';
 import '../models/word.dart';
 import 'session_store.dart';
 
+class StudyCursorState {
+  const StudyCursorState({
+    required this.wordId,
+    required this.remainingWordIds,
+  });
+
+  final String? wordId;
+  final List<String> remainingWordIds;
+
+  factory StudyCursorState.fromJson(Map<String, dynamic> json) {
+    final rawWordId = json['word_id']?.toString().trim();
+    return StudyCursorState(
+      wordId: rawWordId == null || rawWordId.isEmpty || rawWordId == 'null'
+          ? null
+          : rawWordId,
+      remainingWordIds: (json['remaining_word_ids'] as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false),
+    );
+  }
+}
+
 class ApiService {
   ApiService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -253,7 +276,7 @@ class ApiService {
     _ensureOk(response, '전체 복습 상태를 저장하지 못했습니다.');
   }
 
-  Future<String?> fetchStudyCursor(String level, int chapter) async {
+  Future<StudyCursorState> fetchStudyCursor(String level, int chapter) async {
     final uri = Uri.parse('$baseUrl/api/progress/cursor').replace(
       queryParameters: {
         'level': level,
@@ -264,17 +287,17 @@ class ApiService {
         .get(uri, headers: SessionStore.headers())
         .timeout(const Duration(seconds: 8));
     _ensureOk(response, '학습 위치를 불러오지 못했습니다.');
-    final decoded =
-        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    final value = decoded['word_id']?.toString().trim();
-    return value == null || value.isEmpty || value == 'null' ? null : value;
+    return StudyCursorState.fromJson(
+      jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
   }
 
   Future<void> setStudyCursor(
     String level,
     int chapter,
-    String? wordId,
-  ) async {
+    String? wordId, {
+    List<String> remainingWordIds = const [],
+  }) async {
     final response = await _client
         .put(
           Uri.parse('$baseUrl/api/progress/cursor'),
@@ -283,6 +306,7 @@ class ApiService {
             'level': level,
             'chapter': chapter,
             'word_id': wordId,
+            'remaining_word_ids': remainingWordIds,
           }),
         )
         .timeout(const Duration(seconds: 8));
