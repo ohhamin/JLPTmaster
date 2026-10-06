@@ -43,6 +43,7 @@ class _StudyScreenState extends State<StudyScreen> {
   bool _savingFavorite = false;
   bool _completingRound = false;
   bool _completionInFlight = false;
+  bool _advancingWord = false;
   String? _error;
 
   @override
@@ -173,6 +174,25 @@ class _StudyScreenState extends State<StudyScreen> {
     });
   }
 
+  Future<void> _hideRevealBeforeAdvance() async {
+    if (!_showReading && !_showMeaning) return;
+
+    setState(() {
+      _advancingWord = true;
+      _showReading = false;
+      _showMeaning = false;
+    });
+
+    // Let the reveal fade-out finish before swapping the current word.
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    if (!mounted) return;
+  }
+
+  void _finishAdvance() {
+    if (!mounted || !_advancingWord) return;
+    setState(() => _advancingWord = false);
+  }
+
   void _replaceWord(Word updated) {
     final index = _words.indexWhere((word) => word.id == updated.id);
     if (index < 0) return;
@@ -208,8 +228,17 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   Future<void> _studyAgain() async {
-    if (_queue.isEmpty || _completingRound) return;
+    if (_queue.isEmpty || _completingRound || _advancingWord) return;
     _tts.stop();
+
+    final hadReveal = _showReading || _showMeaning;
+    if (hadReveal) {
+      await _hideRevealBeforeAdvance();
+      if (!mounted) return;
+    } else {
+      setState(() => _advancingWord = true);
+    }
+
     String? nextWordId;
     setState(() {
       if (_queue.length > 1) {
@@ -219,6 +248,7 @@ class _StudyScreenState extends State<StudyScreen> {
       nextWordId = _queue.isEmpty ? null : _queue.first;
       _showReading = false;
       _showMeaning = false;
+      _advancingWord = false;
     });
     await _saveCursor(nextWordId);
   }
@@ -238,9 +268,17 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   Future<void> _markKnown() async {
-    if (_queue.isEmpty || _completingRound) return;
+    if (_queue.isEmpty || _completingRound || _advancingWord) return;
     final current = _current;
     _tts.stop();
+
+    final hadReveal = _showReading || _showMeaning;
+    if (hadReveal) {
+      await _hideRevealBeforeAdvance();
+      if (!mounted) return;
+    } else {
+      setState(() => _advancingWord = true);
+    }
 
     final nextQueue = _queue.skip(1).toList();
     final finished = nextQueue.isEmpty;
@@ -250,6 +288,7 @@ class _StudyScreenState extends State<StudyScreen> {
       _queue = nextQueue;
       _showReading = false;
       _showMeaning = false;
+      _advancingWord = false;
       if (finished) _completingRound = true;
     });
 
@@ -666,7 +705,7 @@ class _StudyScreenState extends State<StudyScreen> {
                   child: SizedBox(
                     height: 60,
                     child: OutlinedButton.icon(
-                      onPressed: _completingRound ? null : _studyAgain,
+                      onPressed: _completingRound || _advancingWord ? null : _studyAgain,
                       icon: const Icon(Icons.replay_rounded, size: 20),
                       label: const Text(
                         '다시 학습',
@@ -680,7 +719,7 @@ class _StudyScreenState extends State<StudyScreen> {
                   child: SizedBox(
                     height: 60,
                     child: FilledButton.icon(
-                      onPressed: _completingRound ? null : _markKnown,
+                      onPressed: _completingRound || _advancingWord ? null : _markKnown,
                       icon: const Icon(Icons.check_rounded, size: 20),
                       label: const Text(
                         '알고 있음',
