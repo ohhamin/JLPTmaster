@@ -170,13 +170,14 @@ class UserCardInfoOverlay extends StatelessWidget {
               width: width * 0.43,
               height: height * 0.18,
               child: Align(
-                alignment: Alignment.centerLeft,
+                alignment: Alignment.center,
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
+                  alignment: Alignment.center,
                   child: Text(
                     nickname,
                     maxLines: 1,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'HSYuji',
                       fontSize: width * 0.066,
