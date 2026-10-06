@@ -284,14 +284,74 @@ class UserDataStore:
             self._write_json(path, data)
             return next_value
 
-    def study_cursor(self, user_id: str, level: str, chapter: int) -> str | None:
+    def study_cursor_state(self, user_id: str, level: str, chapter: int) -> dict:
         with self._lock:
             data = self._read_json(self._path(user_id, 'study_positions.json'), {})
-            value = data.get(self._chapter_key(level, chapter))
-            if value is None:
-                return None
-            value = str(value).strip()
-            return value or None
+            raw = data.get(self._chapter_key(level, chapter))
+
+            # Backward compatibility with the old format that stored only a word id.
+            if isinstance(raw, str):
+                value = raw.strip()
+                return {
+                    'word_id': value or None,
+                    'remaining_word_ids': [],
+                }
+
+            if not isinstance(raw, dict):
+                return {'word_id': None, 'remaining_word_ids': []}
+
+            word_id = str(raw.get('word_id') or '').strip() or None
+            remaining: list[str] = []
+            seen: set[str] = set()
+            for item in raw.get('remaining_word_ids') or []:
+                value = str(item or '').strip()
+                if not value or value == word_id or value in seen:
+                    continue
+                seen.add(value)
+                remaining.append(value)
+            return {
+                'word_id': word_id,
+                'remaining_word_ids': remaining,
+            }
+
+    def set_study_cursor_state(
+        self,
+        user_id: str,
+        level: str,
+        chapter: int,
+        word_id: str | None,
+        remaining_word_ids: list[str] | tuple[str, ...] | None = None,
+    ) -> dict:
+        with self._lock:
+            path = self._path(user_id, 'study_positions.json')
+            data = self._read_json(path, {})
+            key = self._chapter_key(level, chapter)
+            current = str(word_id or '').strip() or None
+
+            remaining: list[str] = []
+            seen: set[str] = set()
+            for item in remaining_word_ids or []:
+                value = str(item or '').strip()
+                if not value or value == current or value in seen:
+                    continue
+                seen.add(value)
+                remaining.append(value)
+
+            if current is None and not remaining:
+                data.pop(key, None)
+            else:
+                data[key] = {
+                    'word_id': current,
+                    'remaining_word_ids': remaining,
+                }
+            self._write_json(path, data)
+            return {
+                'word_id': current,
+                'remaining_word_ids': remaining,
+            }
+
+    def study_cursor(self, user_id: str, level: str, chapter: int) -> str | None:
+        return self.study_cursor_state(user_id, level, chapter).get('word_id')
 
     def set_study_cursor(
         self,
@@ -300,17 +360,13 @@ class UserDataStore:
         chapter: int,
         word_id: str | None,
     ) -> str | None:
-        with self._lock:
-            path = self._path(user_id, 'study_positions.json')
-            data = self._read_json(path, {})
-            key = self._chapter_key(level, chapter)
-            value = str(word_id or '').strip()
-            if value:
-                data[key] = value
-            else:
-                data.pop(key, None)
-            self._write_json(path, data)
-            return value or None
+        return self.set_study_cursor_state(
+            user_id,
+            level,
+            chapter,
+            word_id,
+            [],
+        ).get('word_id')
 
     def settings(self, user_id: str) -> dict:
         with self._lock:
