@@ -12,6 +12,21 @@ import '../theme/theme_controller.dart';
 import '../widgets/level_up_dialog.dart';
 import '../widgets/tts_pressable.dart';
 
+class _StudyQueueState {
+  const _StudyQueueState({
+    required this.queue,
+    required this.index,
+    required this.queueChanged,
+  });
+
+  final List<String> queue;
+  final int index;
+  final bool queueChanged;
+
+  String? get currentId =>
+      queue.isEmpty || index < 0 || index >= queue.length ? null : queue[index];
+}
+
 class StudyScreen extends StatefulWidget {
   const StudyScreen({
     super.key,
@@ -38,6 +53,7 @@ class _StudyScreenState extends State<StudyScreen> {
 
   List<Word> _words = const [];
   List<String> _queue = const [];
+  int _queueIndex = 0;
   Set<String> _finalKnownIds = <String>{};
 
   bool _loading = true;
@@ -63,91 +79,176 @@ class _StudyScreenState extends State<StudyScreen> {
   int get _knownCount => _words.where((word) => word.known).length;
 
   Word get _current {
-    final currentId = _queue.first;
+    final currentId = _queue[_queueIndex];
     return _words.firstWhere((word) => word.id == currentId);
   }
 
-  List<String> _buildQueueFromState(
+  List<String> _newRandomCycle(
+    Iterable<String> unknownIds, {
+    String? currentFirst,
+  }) {
+    final ids = unknownIds.toList(growable: true);
+    if (ids.isEmpty) return const [];
+
+    if (currentFirst != null && ids.remove(currentFirst)) {
+      ids.shuffle(_random);
+      return [currentFirst, ...ids];
+    }
+
+    ids.shuffle(_random);
+    return ids;
+  }
+
+  int _findNextUnknownIndex(
+    List<String> queue,
+    int startIndex,
+    Set<String> unknownIds,
+  ) {
+    for (var i = startIndex; i < queue.length; i++) {
+      if (unknownIds.contains(queue[i])) return i;
+    }
+    return -1;
+  }
+
+  _StudyQueueState _prepareCurrent(
+    List<String> queue,
+    int index,
+    Set<String> unknownIds, {
+    bool queueChanged = false,
+  }) {
+    if (queue.isEmpty || unknownIds.isEmpty) {
+      return const _StudyQueueState(
+        queue: [],
+        index: 0,
+        queueChanged: false,
+      );
+    }
+
+    final currentId = queue[index];
+    final laterUnknown =
+        _findNextUnknownIndex(queue, index + 1, unknownIds) >= 0;
+
+    if (!laterUnknown && unknownIds.length > 1) {
+      return _StudyQueueState(
+        queue: _newRandomCycle(unknownIds, currentFirst: currentId),
+        index: 0,
+        queueChanged: true,
+      );
+    }
+
+    return _StudyQueueState(
+      queue: queue,
+      index: index,
+      queueChanged: queueChanged,
+    );
+  }
+
+  _StudyQueueState _buildQueueFromState(
     List<Word> words,
     StudyCursorState saved,
   ) {
+    final allIds = words.map((word) => word.id).toSet();
     final unknownIds =
-        words.where((word) => !word.known).map((word) => word.id).toList();
-    if (unknownIds.isEmpty) return const [];
+        words.where((word) => !word.known).map((word) => word.id).toSet();
+    if (unknownIds.isEmpty) {
+      return const _StudyQueueState(
+        queue: [],
+        index: 0,
+        queueChanged: false,
+      );
+    }
 
-    final unknownSet = unknownIds.toSet();
-    final savedCurrentIsValid =
-        saved.wordId != null && unknownSet.contains(saved.wordId);
-    final currentId = savedCurrentIsValid
-        ? saved.wordId!
-        : unknownIds[_random.nextInt(unknownIds.length)];
+    if (saved.queueInitialized && saved.queueWordIds.isNotEmpty) {
+      final queue = <String>[];
+      final seen = <String>{};
+      for (final id in saved.queueWordIds) {
+        if (allIds.contains(id) && seen.add(id)) queue.add(id);
+      }
 
-    final remaining = <String>[];
-    final seen = <String>{currentId};
-    for (final id in saved.remainingWordIds) {
-      if (unknownSet.contains(id) && seen.add(id)) {
-        remaining.add(id);
+      if (queue.isNotEmpty) {
+        final start = saved.queueIndex.clamp(0, queue.length - 1);
+        var currentIndex = _findNextUnknownIndex(queue, start, unknownIds);
+        if (currentIndex < 0) {
+          final cycle = _newRandomCycle(unknownIds);
+          return _StudyQueueState(
+            queue: cycle,
+            index: 0,
+            queueChanged: true,
+          );
+        }
+        return _prepareCurrent(
+          queue,
+          currentIndex,
+          unknownIds,
+          queueChanged: queue.length != saved.queueWordIds.length,
+        );
       }
     }
 
-    if (!savedCurrentIsValid || !saved.queueInitialized) {
-      final missing = unknownIds.where((id) => !seen.contains(id)).toList()
-        ..shuffle(_random);
-      remaining.addAll(missing);
-    } else if (remaining.isEmpty && unknownSet.length > 1) {
-      remaining.addAll(_refillRemaining(currentId, unknownSet));
-    }
-
-    return [currentId, ...remaining];
+    final legacyCurrent = saved.wordId;
+    final cycle = _newRandomCycle(
+      unknownIds,
+      currentFirst:
+          legacyCurrent != null && unknownIds.contains(legacyCurrent)
+              ? legacyCurrent
+              : null,
+    );
+    return _StudyQueueState(
+      queue: cycle,
+      index: 0,
+      queueChanged: true,
+    );
   }
 
-  List<String> _refillRemaining(
-    String currentId,
-    Iterable<String> unknownIds,
-  ) {
-    final result = unknownIds.where((id) => id != currentId).toList()
-      ..shuffle(_random);
-    return result;
-  }
-
-  List<String> _advanceQueue(
-    List<String> queue,
-    Iterable<String> unknownIds,
-  ) {
-    final unknownSet = unknownIds.toSet();
-    final remaining =
-        queue.skip(1).where(unknownSet.contains).toList(growable: true);
-
-    if (remaining.isEmpty) {
-      final previousId = queue.isEmpty ? null : queue.first;
-      final candidates =
-          unknownSet.where((id) => id != previousId).toList(growable: true);
-      if (candidates.isEmpty) {
-        return previousId == null ? const [] : [previousId];
-      }
-      candidates.shuffle(_random);
-      final nextId = candidates.first;
-      return [nextId, ..._refillRemaining(nextId, unknownSet)];
+  _StudyQueueState _advanceQueue(Iterable<String> unknownIdsIterable) {
+    final unknownIds = unknownIdsIterable.toSet();
+    if (_queue.isEmpty || unknownIds.isEmpty) {
+      return const _StudyQueueState(
+        queue: [],
+        index: 0,
+        queueChanged: false,
+      );
     }
 
-    final nextId = remaining.removeAt(0);
-    if (remaining.isEmpty) {
-      remaining.addAll(_refillRemaining(nextId, unknownSet));
+    final nextIndex =
+        _findNextUnknownIndex(_queue, _queueIndex + 1, unknownIds);
+    if (nextIndex >= 0) {
+      return _prepareCurrent(_queue, nextIndex, unknownIds);
     }
-    return [nextId, ...remaining];
+
+    final previousId = _queue[_queueIndex];
+    final candidates = unknownIds.where((id) => id != previousId).toList();
+    final cycle = _newRandomCycle(
+      unknownIds,
+      currentFirst: candidates.isEmpty ? previousId : null,
+    );
+
+    if (cycle.length > 1 && cycle.first == previousId) {
+      final swapIndex = 1 + _random.nextInt(cycle.length - 1);
+      final temp = cycle[0];
+      cycle[0] = cycle[swapIndex];
+      cycle[swapIndex] = temp;
+    }
+
+    return _StudyQueueState(
+      queue: cycle,
+      index: 0,
+      queueChanged: true,
+    );
   }
 
-  Future<void> _saveStudyQueue() async {
-    final currentId = _queue.isEmpty ? null : _queue.first;
-    final remaining = _queue.length <= 1
-        ? const <String>[]
-        : _queue.skip(1).toList(growable: false);
+  Future<void> _saveStudyQueue({required bool includeQueue}) async {
+    final currentId =
+        _queue.isEmpty || _queueIndex >= _queue.length
+            ? null
+            : _queue[_queueIndex];
     try {
       await _api.setStudyCursor(
         widget.level,
         widget.chapter,
         currentId,
-        remainingWordIds: remaining,
+        queueWordIds: includeQueue ? _queue : null,
+        queueIndex: _queueIndex,
       );
     } catch (_) {}
   }
@@ -193,22 +294,23 @@ class _StudyScreenState extends State<StudyScreen> {
       }
 
       final saved = await _api.fetchStudyCursor(widget.level, widget.chapter);
-      final queue = _buildQueueFromState(words, saved);
+      final queueState = _buildQueueFromState(words, saved);
 
       if (!mounted) return;
       setState(() {
         _words = words;
-        _queue = queue;
+        _queue = queueState.queue;
+        _queueIndex = queueState.index;
         _loading = false;
         _showReading = false;
         _showMeaning = false;
-        _completingRound = words.isNotEmpty && queue.isEmpty;
+        _completingRound = words.isNotEmpty && queueState.queue.isEmpty;
       });
 
-      if (words.isNotEmpty && queue.isEmpty) {
+      if (words.isNotEmpty && queueState.queue.isEmpty) {
         await _completeRound();
-      } else if (queue.isNotEmpty) {
-        await _saveStudyQueue();
+      } else if (queueState.queue.isNotEmpty) {
+        await _saveStudyQueue(includeQueue: queueState.queueChanged);
       }
     } catch (error) {
       if (!mounted) return;
@@ -267,14 +369,15 @@ class _StudyScreenState extends State<StudyScreen> {
 
     final unknownIds =
         _words.where((word) => !word.known).map((word) => word.id);
-    final nextQueue = _advanceQueue(_queue, unknownIds);
+    final next = _advanceQueue(unknownIds);
 
     setState(() {
       _showReading = false;
       _showMeaning = false;
-      _queue = nextQueue;
+      _queue = next.queue;
+      _queueIndex = next.index;
     });
-    await _saveStudyQueue();
+    await _saveStudyQueue(includeQueue: next.queueChanged);
   }
 
   Future<void> _persistKnown(Word word, bool known) async {
@@ -295,6 +398,7 @@ class _StudyScreenState extends State<StudyScreen> {
     if (_queue.isEmpty || _completingRound) return;
     final current = _current;
     final previousQueue = List<String>.from(_queue);
+    final previousIndex = _queueIndex;
     _tts.stop();
 
     final updatedWords = _words
@@ -305,14 +409,20 @@ class _StudyScreenState extends State<StudyScreen> {
     final unknownIds =
         updatedWords.where((word) => !word.known).map((word) => word.id).toList();
     final finished = unknownIds.isEmpty;
-    final nextQueue =
-        finished ? const <String>[] : _advanceQueue(previousQueue, unknownIds);
+    final next = finished
+        ? const _StudyQueueState(
+            queue: [],
+            index: 0,
+            queueChanged: false,
+          )
+        : _advanceQueue(unknownIds);
 
     setState(() {
       _showReading = false;
       _showMeaning = false;
       _words = updatedWords;
-      _queue = nextQueue;
+      _queue = next.queue;
+      _queueIndex = next.index;
       if (finished) _completingRound = true;
     });
 
@@ -326,6 +436,7 @@ class _StudyScreenState extends State<StudyScreen> {
       setState(() {
         _replaceWord(current);
         _queue = previousQueue;
+        _queueIndex = previousIndex;
         _completingRound = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -337,7 +448,7 @@ class _StudyScreenState extends State<StudyScreen> {
     if (finished) {
       await _completeRound();
     } else {
-      await _saveStudyQueue();
+      await _saveStudyQueue(includeQueue: next.queueChanged);
     }
   }
 
@@ -379,18 +490,20 @@ class _StudyScreenState extends State<StudyScreen> {
         resetWords,
         const StudyCursorState(
           wordId: null,
-          remainingWordIds: [],
+          queueWordIds: [],
+          queueIndex: 0,
           queueInitialized: false,
         ),
       );
       setState(() {
         _words = resetWords;
-        _queue = resetQueue;
+        _queue = resetQueue.queue;
+        _queueIndex = resetQueue.index;
         _showReading = false;
         _showMeaning = false;
         _completingRound = false;
       });
-      await _saveStudyQueue();
+      await _saveStudyQueue(includeQueue: true);
 
       final leave = await _showCompletionDialog(
         rounds,
