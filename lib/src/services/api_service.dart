@@ -10,12 +10,14 @@ import 'session_store.dart';
 class StudyCursorState {
   const StudyCursorState({
     required this.wordId,
-    required this.remainingWordIds,
+    required this.queueWordIds,
+    required this.queueIndex,
     required this.queueInitialized,
   });
 
   final String? wordId;
-  final List<String> remainingWordIds;
+  final List<String> queueWordIds;
+  final int queueIndex;
   final bool queueInitialized;
 
   factory StudyCursorState.fromJson(Map<String, dynamic> json) {
@@ -24,10 +26,11 @@ class StudyCursorState {
       wordId: rawWordId == null || rawWordId.isEmpty || rawWordId == 'null'
           ? null
           : rawWordId,
-      remainingWordIds: (json['remaining_word_ids'] as List<dynamic>? ?? const [])
+      queueWordIds: (json['queue_word_ids'] as List<dynamic>? ?? const [])
           .map((item) => item.toString())
           .where((item) => item.isNotEmpty)
           .toList(growable: false),
+      queueIndex: (json['queue_index'] as num?)?.toInt() ?? 0,
       queueInitialized: json['queue_initialized'] == true,
     );
   }
@@ -299,18 +302,21 @@ class ApiService {
     String level,
     int chapter,
     String? wordId, {
-    List<String> remainingWordIds = const [],
+    List<String>? queueWordIds,
+    int? queueIndex,
   }) async {
+    final payload = <String, dynamic>{
+      'level': level,
+      'chapter': chapter,
+      'word_id': wordId,
+      if (queueWordIds != null) 'queue_word_ids': queueWordIds,
+      if (queueIndex != null) 'queue_index': queueIndex,
+    };
     final response = await _client
         .put(
           Uri.parse('$baseUrl/api/progress/cursor'),
           headers: SessionStore.headers(json: true),
-          body: jsonEncode({
-            'level': level,
-            'chapter': chapter,
-            'word_id': wordId,
-            'remaining_word_ids': remainingWordIds,
-          }),
+          body: jsonEncode(payload),
         )
         .timeout(const Duration(seconds: 8));
     _ensureOk(response, '학습 위치를 저장하지 못했습니다.');
