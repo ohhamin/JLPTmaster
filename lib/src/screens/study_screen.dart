@@ -166,7 +166,7 @@ class _StudyScreenState extends State<StudyScreen> {
       }
 
       if (queue.isNotEmpty) {
-        final start = saved.queueIndex.clamp(0, queue.length - 1);
+        final start = saved.queueIndex.clamp(0, queue.length - 1).toInt();
         var currentIndex = _findNextUnknownIndex(queue, start, unknownIds);
         if (currentIndex < 0) {
           final cycle = _newRandomCycle(unknownIds);
