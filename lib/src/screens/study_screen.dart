@@ -824,7 +824,7 @@ class _StudyScreenState extends State<StudyScreen> {
                 Expanded(
                   child: SizedBox(
                     height: 60,
-                    child: OutlinedButton.icon(
+                    child: FilledButton.tonalIcon(
                       onPressed: _completingRound ? null : _studyAgain,
                       icon: const Icon(Icons.replay_rounded, size: 20),
                       label: const Text(
