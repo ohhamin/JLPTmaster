@@ -215,7 +215,8 @@ class StudyCursorUpdate(BaseModel):
     level: JlptLevel
     chapter: int = Field(ge=0)
     word_id: str | None = Field(default=None, max_length=200)
-    remaining_word_ids: list[str] = Field(default_factory=list, max_length=10000)
+    queue_word_ids: list[str] | None = Field(default=None, max_length=10000)
+    queue_index: int | None = Field(default=None, ge=0)
 
 
 class SettingsUpdate(BaseModel):
@@ -579,7 +580,8 @@ def set_study_cursor(
         payload.level,
         payload.chapter,
         payload.word_id,
-        payload.remaining_word_ids,
+        payload.queue_word_ids,
+        payload.queue_index,
     )
     return {
         'level': payload.level,
