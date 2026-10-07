@@ -289,35 +289,63 @@ class UserDataStore:
             data = self._read_json(self._path(user_id, 'study_positions.json'), {})
             raw = data.get(self._chapter_key(level, chapter))
 
-            # Backward compatibility with the old format that stored only a word id.
             if isinstance(raw, str):
                 value = raw.strip()
                 return {
                     'word_id': value or None,
-                    'remaining_word_ids': [],
+                    'queue_word_ids': [],
+                    'queue_index': 0,
                     'queue_initialized': False,
                 }
 
             if not isinstance(raw, dict):
                 return {
                     'word_id': None,
-                    'remaining_word_ids': [],
+                    'queue_word_ids': [],
+                    'queue_index': 0,
                     'queue_initialized': False,
                 }
 
             word_id = str(raw.get('word_id') or '').strip() or None
-            remaining: list[str] = []
+
+            queue: list[str] = []
             seen: set[str] = set()
-            for item in raw.get('remaining_word_ids') or []:
-                value = str(item or '').strip()
-                if not value or value == word_id or value in seen:
-                    continue
-                seen.add(value)
-                remaining.append(value)
+            raw_queue = raw.get('queue_word_ids')
+            if isinstance(raw_queue, list):
+                for item in raw_queue:
+                    value = str(item or '').strip()
+                    if value and value not in seen:
+                        seen.add(value)
+                        queue.append(value)
+
+            if not queue:
+                legacy_remaining = raw.get('remaining_word_ids')
+                if isinstance(legacy_remaining, list):
+                    if word_id:
+                        queue.append(word_id)
+                        seen.add(word_id)
+                    for item in legacy_remaining:
+                        value = str(item or '').strip()
+                        if value and value not in seen:
+                            seen.add(value)
+                            queue.append(value)
+
+            try:
+                queue_index = max(0, int(raw.get('queue_index') or 0))
+            except (TypeError, ValueError):
+                queue_index = 0
+            if queue:
+                queue_index = min(queue_index, len(queue) - 1)
+                if word_id is None:
+                    word_id = queue[queue_index]
+            else:
+                queue_index = 0
+
             return {
                 'word_id': word_id,
-                'remaining_word_ids': remaining,
-                'queue_initialized': bool(raw.get('queue_initialized', True)),
+                'queue_word_ids': queue,
+                'queue_index': queue_index,
+                'queue_initialized': bool(raw.get('queue_initialized', bool(queue))),
             }
 
     def set_study_cursor_state(
@@ -326,35 +354,53 @@ class UserDataStore:
         level: str,
         chapter: int,
         word_id: str | None,
-        remaining_word_ids: list[str] | tuple[str, ...] | None = None,
+        queue_word_ids: list[str] | tuple[str, ...] | None = None,
+        queue_index: int | None = None,
     ) -> dict:
         with self._lock:
             path = self._path(user_id, 'study_positions.json')
             data = self._read_json(path, {})
             key = self._chapter_key(level, chapter)
+            previous = self.study_cursor_state(user_id, level, chapter)
+
             current = str(word_id or '').strip() or None
+            if queue_word_ids is None:
+                queue = list(previous.get('queue_word_ids') or [])
+            else:
+                queue = []
+                seen: set[str] = set()
+                for item in queue_word_ids:
+                    value = str(item or '').strip()
+                    if value and value not in seen:
+                        seen.add(value)
+                        queue.append(value)
 
-            remaining: list[str] = []
-            seen: set[str] = set()
-            for item in remaining_word_ids or []:
-                value = str(item or '').strip()
-                if not value or value == current or value in seen:
-                    continue
-                seen.add(value)
-                remaining.append(value)
+            if queue_index is None:
+                index = int(previous.get('queue_index') or 0)
+            else:
+                index = max(0, int(queue_index))
 
-            if current is None and not remaining:
+            if queue:
+                index = min(index, len(queue) - 1)
+                if current is None:
+                    current = queue[index]
+            else:
+                index = 0
+
+            if current is None and not queue:
                 data.pop(key, None)
             else:
                 data[key] = {
                     'word_id': current,
-                    'remaining_word_ids': remaining,
+                    'queue_word_ids': queue,
+                    'queue_index': index,
                     'queue_initialized': True,
                 }
             self._write_json(path, data)
             return {
                 'word_id': current,
-                'remaining_word_ids': remaining,
+                'queue_word_ids': queue,
+                'queue_index': index,
                 'queue_initialized': True,
             }
 
@@ -373,7 +419,6 @@ class UserDataStore:
             level,
             chapter,
             word_id,
-            [],
         ).get('word_id')
 
     def settings(self, user_id: str) -> dict:
