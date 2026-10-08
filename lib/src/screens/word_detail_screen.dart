@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/word.dart';
 import '../widgets/kanji_section.dart';
+import '../widgets/copy_text_button.dart';
 import '../services/api_service.dart';
 import '../services/tts_service.dart';
 import '../theme/theme_controller.dart';
@@ -181,28 +182,36 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Flexible(
-                    child: Text(
-                      item.word,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                  ),
-                  if (item.reading.isNotEmpty) ...[
-                    const SizedBox(width: 10),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 3),
-                      child: Text(
-                        item.reading,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
+                  Expanded(
+                    child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                item.word,
+                                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                              ),
                             ),
-                      ),
-                    ),
-                  ],
+                            if (item.reading.isNotEmpty) ...[
+                              const SizedBox(width: 10),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 3),
+                                child: Text(
+                                  item.reading,
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),,
+                  ),
+                  CopyTextButton(text: item.word, label: '단어'),
                 ],
               ),
               const SizedBox(height: 12),
@@ -229,12 +238,20 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                 ),
                 if (item.exampleJa.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Text(
-                    item.exampleJa,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          height: 1.55,
-                          fontWeight: FontWeight.w700,
-                        ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                              item.exampleJa,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    height: 1.55,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),,
+                      ),
+                      CopyTextButton(text: item.exampleJa, label: '예문'),
+                    ],
                   ),
                 ],
                 if (item.exampleKo.isNotEmpty) ...[
@@ -317,20 +334,28 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 22),
-                  Semantics(
-                    button: true,
-                    label: '${_word.word} 발음 듣기',
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _speakWord,
-                      child: Text(
-                        _word.word,
-                        style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1.2,
-                            ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Semantics(
+                              button: true,
+                              label: '${_word.word} 발음 듣기',
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: _speakWord,
+                                child: Text(
+                                  _word.word,
+                                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -1.2,
+                                      ),
+                                ),
+                              ),
+                            ),,
                       ),
-                    ),
+                      CopyTextButton(text: _word.word, label: '단어'),
+                    ],
                   ),
                   if (_word.reading.isNotEmpty) ...[
                     const SizedBox(height: 4),
@@ -369,10 +394,6 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                 ],
               ),
             ),
-            if (_word.kanji.isNotEmpty) ...[
-              const SizedBox(height: 30),
-              KanjiSection(kanji: _word.kanji),
-            ],
             const SizedBox(height: 30),
             const _SectionLabel(number: '01', title: '예문'),
             const SizedBox(height: 14),
@@ -399,22 +420,31 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Semantics(
-                          button: _word.exampleJa.isNotEmpty,
-                          label: _word.exampleJa.isEmpty ? null : '예문 발음 듣기',
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: _word.exampleJa.isEmpty
-                                ? null
-                                : () => _speakJapanese(_word.exampleJa),
-                            child: Text(
-                              _word.exampleJa.isEmpty ? '예문이 없습니다.' : _word.exampleJa,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    height: 1.55,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Semantics(
+                                    button: _word.exampleJa.isNotEmpty,
+                                    label: _word.exampleJa.isEmpty ? null : '예문 발음 듣기',
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: _word.exampleJa.isEmpty
+                                          ? null
+                                          : () => _speakJapanese(_word.exampleJa),
+                                      child: Text(
+                                        _word.exampleJa.isEmpty ? '예문이 없습니다.' : _word.exampleJa,
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              height: 1.55,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    ),
+                                  ),,
                             ),
-                          ),
+                            if (_word.exampleJa.isNotEmpty)
+                          CopyTextButton(text: _word.exampleJa, label: '예문'),
+                          ],
                         ),
                         if (_word.exampleReading.isNotEmpty) ...[
                           const SizedBox(height: 10),
@@ -442,8 +472,18 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                 ],
               ),
             ),
+            if (_word.kanji.isNotEmpty) ...[
+              const SizedBox(height: 34),
+              const _SectionLabel(number: '02', title: '한자'),
+              const SizedBox(height: 14),
+              KanjiSection(
+                kanji: _word.kanji,
+                onSpeak: _speakJapanese,
+                showHeading: false,
+              ),
+            ],
             const SizedBox(height: 34),
-            const _SectionLabel(number: '02', title: '예문 속 JLPT 단어'),
+            const _SectionLabel(number: '03', title: '예문 속 JLPT 단어'),
             const SizedBox(height: 14),
             if (_word.exampleWords.isEmpty)
               Container(
@@ -474,7 +514,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                     .toList(),
               ),
             const SizedBox(height: 34),
-            const _SectionLabel(number: '03', title: 'AI 설명'),
+            const _SectionLabel(number: '04', title: 'AI 설명'),
             const SizedBox(height: 14),
             Material(
               color: Colors.transparent,
@@ -634,6 +674,7 @@ class _RelatedTile extends StatelessWidget {
                 children: [
                   if (item.level != null) _SmallBadge(text: item.level!),
                   const Spacer(),
+                  CopyTextButton(text: item.word, label: '단어'),
                   Icon(Icons.north_east_rounded, size: 16, color: scheme.onSurfaceVariant),
                 ],
               ),
