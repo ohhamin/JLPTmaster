@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -94,11 +95,14 @@ def main() -> None:
     parser.add_argument('--batch-size', type=int, default=16)
     parser.add_argument('--limit', type=int, default=0, help='Process at most this many new glyphs (0 = all)')
     parser.add_argument('--delay', type=float, default=0.4)
+    parser.add_argument('--workers', type=int, default=3, help='Concurrent GPT requests (1-5)')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()
 
     if not 1 <= args.batch_size <= 40:
         parser.error('--batch-size must be between 1 and 40')
+    if not 1 <= args.workers <= 5:
+        parser.error('--workers must be between 1 and 5')
 
     with Path(args.words).open('r', encoding='utf-8') as file:
         words = json.load(file)
@@ -141,26 +145,35 @@ def main() -> None:
         print('backup=' + str(backup), flush=True)
 
     client = OpenAI(timeout=120, max_retries=2)
-    for start in range(0, len(todo), args.batch_size):
-        batch = todo[start:start + args.batch_size]
+    batches = [todo[start:start + args.batch_size] for start in range(0, len(todo), args.batch_size)]
+
+    def fetch_batch(batch: list[str]) -> dict[str, dict]:
         for attempt in range(3):
             try:
-                enriched = ask_batch(client, args.model, batch)
-                break
+                return ask_batch(client, args.model, batch)
             except Exception as error:
                 if attempt == 2:
                     raise RuntimeError(
-                        f'Batch starting at index {start} failed; saved batches are safe to resume'
+                        f'Kanji batch {batch[0]}..{batch[-1]} failed; rerun to resume'
                     ) from error
                 wait = 2 ** (attempt + 1)
                 print(f'batch retry {attempt + 1}, wait={wait}s, reason={type(error).__name__}', flush=True)
                 time.sleep(wait)
-        cache.update(enriched)
-        save_atomic(output, cache)
-        print(f'progress={min(start + len(batch), len(todo))}/{len(todo)} '
-              f'new={len(enriched)} cached={len(cache)}', flush=True)
-        if args.delay > 0:
-            time.sleep(args.delay)
+        return {}
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        pending = {executor.submit(fetch_batch, batch): batch for batch in batches}
+        for future in as_completed(pending):
+            batch = pending[future]
+            enriched = future.result()
+            cache.update(enriched)
+            save_atomic(output, cache)
+            completed += len(batch)
+            print(f'progress={completed}/{len(todo)} '
+                  f'new={len(enriched)} cached={len(cache)}', flush=True)
+            if args.delay > 0:
+                time.sleep(args.delay)
 
 
 if __name__ == '__main__':
