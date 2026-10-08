@@ -69,7 +69,9 @@ def ask_batch(client: OpenAI, model: str, glyphs: list[str]) -> dict[str, dict]:
         model=model,
         instructions=instructions,
         input='다음 일본 한자를 글자별로 분석해 줘: ' + ' '.join(glyphs),
-        max_output_tokens=6000,
+        max_output_tokens=3000,
+        reasoning={'effort': 'low'},
+        text={'format': {'type': 'json_object'}},
     )
     text = (response.output_text or '').strip()
     if text.startswith('```'):
@@ -92,7 +94,7 @@ def main() -> None:
     parser.add_argument('--words', default=os.getenv('WORDS_JSON_PATH', '/app/data/words.json'))
     parser.add_argument('--output', default=os.getenv('KANJI_JSON_PATH', '/app/data/kanji.json'))
     parser.add_argument('--model', default=os.getenv('KANJI_OPENAI_MODEL') or os.getenv('OPENAI_MODEL') or 'gpt-5-mini')
-    parser.add_argument('--batch-size', type=int, default=16)
+    parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--limit', type=int, default=0, help='Process at most this many new glyphs (0 = all)')
     parser.add_argument('--delay', type=float, default=0.4)
     parser.add_argument('--workers', type=int, default=3, help='Concurrent GPT requests (1-5)')
@@ -148,32 +150,46 @@ def main() -> None:
     batches = [todo[start:start + args.batch_size] for start in range(0, len(todo), args.batch_size)]
 
     def fetch_batch(batch: list[str]) -> dict[str, dict]:
-        for attempt in range(3):
-            try:
-                return ask_batch(client, args.model, batch)
-            except Exception as error:
-                if attempt == 2:
-                    raise RuntimeError(
-                        f'Kanji batch {batch[0]}..{batch[-1]} failed; rerun to resume'
-                    ) from error
-                wait = 2 ** (attempt + 1)
-                print(f'batch retry {attempt + 1}, wait={wait}s, reason={type(error).__name__}', flush=True)
-                time.sleep(wait)
-        return {}
+        # A malformed/truncated large response should not terminate the entire
+        # enrichment. Retry with a smaller group and persist all good results.
+        def request(group: list[str]) -> dict[str, dict]:
+            for attempt in range(2):
+                try:
+                    values = ask_batch(client, args.model, group)
+                    if len(values) != len(group):
+                        raise ValueError(f'incomplete response: {len(values)}/{len(group)}')
+                    return values
+                except Exception as error:
+                    if attempt == 0:
+                        print(f'batch retry for {group[0]}..{group[-1]} '
+                              f'reason={type(error).__name__}', flush=True)
+                        time.sleep(1)
+            if len(group) == 1:
+                print(f'UNRESOLVED kanji={group[0]!r}', flush=True)
+                return {}
+            middle = len(group) // 2
+            return {**request(group[:middle]), **request(group[middle:])}
+
+        return request(batch)
 
     completed = 0
+    unresolved = 0
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
         pending = {executor.submit(fetch_batch, batch): batch for batch in batches}
         for future in as_completed(pending):
             batch = pending[future]
             enriched = future.result()
             cache.update(enriched)
+            unresolved += len(batch) - len(enriched)
             save_atomic(output, cache)
             completed += len(batch)
             print(f'progress={completed}/{len(todo)} '
                   f'new={len(enriched)} cached={len(cache)}', flush=True)
             if args.delay > 0:
                 time.sleep(args.delay)
+    print(f'final_cached={len(cache)} unresolved={unresolved}', flush=True)
+    if unresolved:
+        raise SystemExit('Some characters remain unresolved; re-run to retry only missing characters')
 
 
 if __name__ == '__main__':
