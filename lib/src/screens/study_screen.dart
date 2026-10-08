@@ -11,6 +11,7 @@ import '../theme/app_typography.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/level_up_dialog.dart';
 import '../widgets/tts_pressable.dart';
+import '../widgets/copy_text_button.dart';
 
 class _StudyQueueState {
   const _StudyQueueState({
@@ -692,27 +693,35 @@ class _StudyScreenState extends State<StudyScreen> {
                                 ),
                                 const SizedBox(height: 8),
                               ],
-                              Semantics(
-                                button: true,
-                                label: '${current.word} 발음 듣기',
-                                child: TtsPressable(
-                                  onPressed: () => _speakWord(current),
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(
-                                      current.word,
-                                      textAlign: TextAlign.center,
-                                      style: AppTypography.japanese(
-                                            Theme.of(context).textTheme.displayLarge,
-                                          ).copyWith(
-                                            fontSize: 68,
-                                            height: 1.12,
-                                            letterSpacing: -0.6,
-                                          ),
-                                    ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Semantics(
+                                                                      button: true,
+                                                                      label: '${current.word} 발음 듣기',
+                                                                      child: TtsPressable(
+                                                                        onPressed: () => _speakWord(current),
+                                                                        borderRadius: BorderRadius.circular(20),
+                                                                        child: FittedBox(
+                                                                          fit: BoxFit.scaleDown,
+                                                                          child: Text(
+                                                                            current.word,
+                                                                            textAlign: TextAlign.center,
+                                                                            style: AppTypography.japanese(
+                                                                                  Theme.of(context).textTheme.displayLarge,
+                                                                                ).copyWith(
+                                                                                  fontSize: 68,
+                                                                                  height: 1.12,
+                                                                                  letterSpacing: -0.6,
+                                                                                ),
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ),
                                   ),
-                                ),
+                                  CopyTextButton(text: current.word, label: '단어'),
+                                ],
                               ),
                               if (current.meaningKo.isNotEmpty) ...[
                                 const SizedBox(height: 12),
@@ -747,25 +756,34 @@ class _StudyScreenState extends State<StudyScreen> {
                                 ],
                               ),
                               const SizedBox(height: 14),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Semantics(
-                                  button: current.exampleJa.isNotEmpty,
-                                  label: current.exampleJa.isEmpty ? null : '예문 발음 듣기',
-                                  child: TtsPressable(
-                                    onPressed: () => _speakJapanese(current.exampleJa),
-                                    alignment: Alignment.centerLeft,
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-                                    child: Text(
-                                      current.exampleJa.isEmpty ? '예문이 없습니다.' : current.exampleJa,
-                                      style: AppTypography.japanese(
-                                            Theme.of(context).textTheme.titleLarge,
-                                          ).copyWith(
-                                            height: 1.60,
-                                          ),
-                                    ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Align(
+                                                                      alignment: Alignment.centerLeft,
+                                                                      child: Semantics(
+                                                                        button: current.exampleJa.isNotEmpty,
+                                                                        label: current.exampleJa.isEmpty ? null : '예문 발음 듣기',
+                                                                        child: TtsPressable(
+                                                                          onPressed: () => _speakJapanese(current.exampleJa),
+                                                                          alignment: Alignment.centerLeft,
+                                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                                                                          child: Text(
+                                                                            current.exampleJa.isEmpty ? '예문이 없습니다.' : current.exampleJa,
+                                                                            style: AppTypography.japanese(
+                                                                                  Theme.of(context).textTheme.titleLarge,
+                                                                                ).copyWith(
+                                                                                  height: 1.60,
+                                                                                ),
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ),
                                   ),
-                                ),
+                                  if (current.exampleJa.isNotEmpty)
+                                    CopyTextButton(text: current.exampleJa, label: '예문'),
+                                ],
                               ),
                               if (current.exampleReading.isNotEmpty) ...[
                                 const SizedBox(height: 10),
