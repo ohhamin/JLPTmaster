@@ -68,7 +68,7 @@ def ask_batch(client: OpenAI, model: str, glyphs: list[str]) -> dict[str, dict]:
     response = client.responses.create(
         model=model,
         instructions=instructions,
-        input='다음 일본 한자를 글자별로 분석해 줘: ' + ' '.join(glyphs),
+        input='반드시 JSON 객체로 답하세요. 다음 일본 한자를 글자별로 분석: ' + ' '.join(glyphs),
         max_output_tokens=3000,
         reasoning={'effort': 'low'},
         text={'format': {'type': 'json_object'}},
@@ -162,7 +162,7 @@ def main() -> None:
                 except Exception as error:
                     if attempt == 0:
                         print(f'batch retry for {group[0]}..{group[-1]} '
-                              f'reason={type(error).__name__}', flush=True)
+                              f'reason={type(error).__name__} detail={str(error)[:220]}', flush=True)
                         time.sleep(1)
             if len(group) == 1:
                 print(f'UNRESOLVED kanji={group[0]!r}', flush=True)
