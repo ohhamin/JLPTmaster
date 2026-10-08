@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/word.dart';
+import '../widgets/kanji_section.dart';
 import '../services/api_service.dart';
 import '../services/tts_service.dart';
 import '../theme/theme_controller.dart';
@@ -71,7 +72,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
       final updated = await _api.updateWord(before.id, favorite: next);
       if (!mounted) return;
       setState(() {
-        _word = updated;
+        _word = updated.copyWith(kanji: before.kanji);
         _savingFavorite = false;
       });
     } catch (error) {
@@ -368,6 +369,10 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                 ],
               ),
             ),
+            if (_word.kanji.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              KanjiSection(kanji: _word.kanji),
+            ],
             const SizedBox(height: 30),
             const _SectionLabel(number: '01', title: '예문'),
             const SizedBox(height: 14),

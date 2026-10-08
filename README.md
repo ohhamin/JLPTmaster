@@ -53,6 +53,25 @@
 
 `example_words`에는 예문에 등장하는 **현재 학습 단어 이외의 JLPT 단어**를 넣습니다. 데이터 생성 단계에서 전체 단어 사전과 교차 참조해 채웁니다.
 
+## 한자 사전 사전 적재
+
+단어 표기에 한자가 있는 경우에만 상세 화면에 글자별 뜻·음독·훈독을 표시합니다.
+관련 한자는 `backend/data/kanji.json`에 글자당 한 번만 저장하고,
+`GET /api/words/{id}`는 해당 단어의 한자 항목만 `kanji` 배열로 반환합니다.
+JLPT 등급·해당 한자를 포함하는 다른 단어는 한자 카드에 표시하지 않습니다.
+
+백엔드 Docker 이미지를 갱신한 뒤, 이미 설정된 OpenAI 키로 최초 1회 적재합니다.
+
+```bash
+docker exec jlptmaster-api python tools/enrich_kanji.py --dry-run
+docker exec jlptmaster-api python tools/enrich_kanji.py --batch-size 16
+```
+
+완료된 배치를 매번 원자적으로 파일에 저장하며, 재실행 시 이미 저장된 글자는
+GPT에 재요청하지 않습니다. `--limit 16`으로 소규모 시험 실행할 수 있습니다.
+`KANJI_OPENAI_MODEL`(기본 `gpt-5-mini`)로 모델을 별도 지정할 수 있습니다.
+기존 `words.json` 및 사용자 학습 기록은 수정되지 않습니다.
+
 ## 주요 API
 
 - `GET /health`

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from .auth_store import AuthStore
 from .gamification_store import GamificationStore
+from .kanji_store import KanjiStore
 from .store import JsonWordStore
 from .user_data_store import UserDataStore
 
@@ -20,6 +21,7 @@ store = JsonWordStore()
 auth_store = AuthStore()
 user_data = UserDataStore()
 gamification = GamificationStore()
+kanji_store = KanjiStore()
 
 app.add_middleware(
     CORSMiddleware,
@@ -399,6 +401,7 @@ def get_word(
         str(user['id']),
         known_chapter=effective_chapter,
     )
+    merged['kanji'] = kanji_store.for_word(str(base.get('word') or ''))
     return _scope_word(merged, effective_chapter) if scoped_chapter is not None and effective_chapter else merged
 
 

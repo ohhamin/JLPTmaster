@@ -9,6 +9,8 @@ services:
       - '127.0.0.1:8000:8000'
     environment:
       WORDS_JSON_PATH: /app/data/words.json
+      KANJI_JSON_PATH: /app/data/kanji.json
+      KANJI_OPENAI_MODEL: ${KANJI_OPENAI_MODEL:-gpt-5-mini}
       PROGRESS_JSON_PATH: /app/data/progress.json
       USERS_JSON_PATH: /app/data/users.json
       SESSIONS_JSON_PATH: /app/data/sessions.json

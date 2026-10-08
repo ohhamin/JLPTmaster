@@ -28,6 +28,27 @@ class RelatedWord {
       );
 }
 
+class KanjiInfo {
+  const KanjiInfo({
+    required this.character,
+    required this.meaningKo,
+    required this.onyomi,
+    required this.kunyomi,
+  });
+
+  final String character;
+  final String meaningKo;
+  final List<String> onyomi;
+  final List<String> kunyomi;
+
+  factory KanjiInfo.fromJson(Map<String, dynamic> json) => KanjiInfo(
+        character: json['character'] as String? ?? '',
+        meaningKo: json['meaning_ko'] as String? ?? '',
+        onyomi: (json['onyomi'] as List<dynamic>? ?? const []).whereType<String>().toList(),
+        kunyomi: (json['kunyomi'] as List<dynamic>? ?? const []).whereType<String>().toList(),
+      );
+}
+
 class Word {
   const Word({
     required this.id,
@@ -41,6 +62,7 @@ class Word {
     this.exampleReading = '',
     this.exampleKo = '',
     this.exampleWords = const [],
+    this.kanji = const [],
     this.tags = const [],
     this.favorite = false,
     this.known = false,
@@ -59,13 +81,14 @@ class Word {
   final String exampleReading;
   final String exampleKo;
   final List<RelatedWord> exampleWords;
+  final List<KanjiInfo> kanji;
   final List<String> tags;
   final bool favorite;
   final bool known;
   final int correctCount;
   final int wrongCount;
 
-  Word copyWith({bool? favorite, bool? known}) => Word(
+  Word copyWith({bool? favorite, bool? known, List<KanjiInfo>? kanji}) => Word(
         id: id,
         word: word,
         reading: reading,
@@ -77,6 +100,7 @@ class Word {
         exampleReading: exampleReading,
         exampleKo: exampleKo,
         exampleWords: exampleWords,
+        kanji: kanji ?? this.kanji,
         tags: tags,
         favorite: favorite ?? this.favorite,
         known: known ?? this.known,
@@ -98,6 +122,10 @@ class Word {
         exampleWords: (json['example_words'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
             .map(RelatedWord.fromJson)
+            .toList(),
+        kanji: (json['kanji'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(KanjiInfo.fromJson)
             .toList(),
         tags: (json['tags'] as List<dynamic>? ?? const []).whereType<String>().toList(),
         favorite: json['favorite'] as bool? ?? false,
