@@ -1,8 +1,58 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:jlptmaster/src/widgets/copy_text_button.dart';
+import 'package:jlptmaster/src/widgets/kanji_section.dart';
 import 'package:jlptmaster/src/models/study_summary.dart';
 import 'package:jlptmaster/src/models/word.dart';
 
 void main() {
+  testWidgets('copy button copies Japanese text exactly', (tester) async {
+    String? copied;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map<dynamic, dynamic>)['text'] as String?;
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: CopyTextButton(text: '勉強します。', label: '예문')),
+    ));
+    await tester.tap(find.byTooltip('예문 복사'));
+    await tester.pump();
+    expect(copied, '勉強します。');
+  });
+
+  testWidgets('kanji taps play onyomi while copy does not play', (tester) async {
+    final spoken = <String>[];
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: KanjiSection(
+          kanji: const [
+            KanjiInfo(
+              character: '警',
+              meaningKo: '경계할 경',
+              onyomi: ['ケイ'],
+              kunyomi: ['いまし.める'],
+            ),
+          ],
+          onSpeak: spoken.add,
+        ),
+      ),
+    ));
+    await tester.tap(find.text('警'));
+    await tester.pump();
+    expect(spoken, ['ケイ']);
+    await tester.tap(find.byTooltip('한자 복사'));
+    await tester.pump();
+    expect(spoken, ['ケイ']);
+  });
+
   test('Word parses study and example metadata', () {
     final word = Word.fromJson({
       'id': 'sample',

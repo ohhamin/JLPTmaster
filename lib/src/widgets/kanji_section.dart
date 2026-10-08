@@ -2,12 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../models/word.dart';
 import '../theme/app_typography.dart';
+import 'copy_text_button.dart';
+import 'tts_pressable.dart';
 
 /// Minimal per-character reference cards. No JLPT grade or related-word list.
 class KanjiSection extends StatelessWidget {
-  const KanjiSection({super.key, required this.kanji});
+  const KanjiSection({
+    super.key,
+    required this.kanji,
+    this.onSpeak,
+    this.showHeading = true,
+  });
 
   final List<KanjiInfo> kanji;
+  final ValueChanged<String>? onSpeak;
+  final bool showHeading;
 
   @override
   Widget build(BuildContext context) {
@@ -16,13 +25,15 @@ class KanjiSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '한자 (${kanji.length})',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-        ),
-        const SizedBox(height: 14),
+        if (showHeading) ...[
+          Text(
+            '한자 (${kanji.length})',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 14),
+        ],
         for (final item in kanji) ...[
           Container(
             width: double.infinity,
@@ -37,12 +48,28 @@ class KanjiSection extends StatelessWidget {
               children: [
                 SizedBox(
                   width: 66,
-                  child: Text(
-                    item.character,
-                    style: AppTypography.japanese(
-                      Theme.of(context).textTheme.displaySmall,
-                    ).copyWith(fontSize: 40, height: 1.2),
-                  ),
+                  child: onSpeak != null && item.onyomi.isNotEmpty
+                      ? Semantics(
+                          button: true,
+                          label: '${item.character} 음독 발음 듣기',
+                          child: TtsPressable(
+                            onPressed: () => onSpeak!(item.onyomi.first),
+                            alignment: Alignment.centerLeft,
+                            padding: EdgeInsets.zero,
+                            child: Text(
+                              item.character,
+                              style: AppTypography.japanese(
+                                Theme.of(context).textTheme.displaySmall,
+                              ).copyWith(fontSize: 40, height: 1.2),
+                            ),
+                          ),
+                        )
+                      : Text(
+                          item.character,
+                          style: AppTypography.japanese(
+                            Theme.of(context).textTheme.displaySmall,
+                          ).copyWith(fontSize: 40, height: 1.2),
+                        ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -62,6 +89,7 @@ class KanjiSection extends StatelessWidget {
                     ],
                   ),
                 ),
+                CopyTextButton(text: item.character, label: '한자'),
               ],
             ),
           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/word.dart';
+import '../widgets/copy_text_button.dart';
 import '../services/api_service.dart';
 import '../theme/app_typography.dart';
 import 'word_detail_screen_v2.dart';
@@ -231,7 +232,8 @@ class _FavoriteRow extends StatelessWidget {
                       ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
+              CopyTextButton(text: word.word, label: '단어'),
               Icon(Icons.chevron_right_rounded, size: 20, color: scheme.onSurfaceVariant),
             ],
           ),
