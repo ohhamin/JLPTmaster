@@ -12,6 +12,10 @@ from pathlib import Path
 
 from openai import OpenAI
 
+import sys
+
+# Support both `python tools/enrich_kanji.py` and `python -m tools.enrich_kanji`.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.kanji_store import is_kanji
 
 
